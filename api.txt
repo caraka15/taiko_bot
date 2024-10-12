@@ -1,0 +1,7 @@
+https://trailblazer.mainnet.taiko.xyz/user/final?address=0x28b8A9aC47E3E43e3A0872028476ef898055871C
+
+
+SEASON 2
+https://trailblazer.mainnet.taiko.xyz/s2/user/rank?address=0x28b8A9aC47E3E43e3A0872028476ef898055871C
+
+https://trailblazer.mainnet.taiko.xyz/s2/user/history?address=0x28b8A9aC47E3E43e3A0872028476ef898055871C

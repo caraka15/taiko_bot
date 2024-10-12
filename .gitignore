@@ -1,0 +1,27 @@
+# Mengabaikan direktori node_modules
+node_modules/
+
+# Mengabaikan file .env
+.env
+
+# Mengabaikan file log
+*.log
+
+# Mengabaikan direktori coverage (misalnya dari testing)
+coverage/
+
+# Mengabaikan file lock dari paket manager
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Mengabaikan direktori build
+build/
+
+# Mengabaikan file distribusi
+dist/
+
+# Mengabaikan file konfigurasi editor
+.vscode/
+.idea/
+*.swp
