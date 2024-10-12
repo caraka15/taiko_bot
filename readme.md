@@ -7,7 +7,7 @@ Bot ini digunakan untuk melakukan operasi deposit dan withdraw otomatis pada jar
 1. Clone repositori ini:
 
    ```
-   git clone https://github.com/username/taiko_bot.git
+   git clone https://github.com/caraka15/taiko_bot.git
    ```
 
 2. Masuk ke direktori proyek:
