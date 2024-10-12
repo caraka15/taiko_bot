@@ -1,4 +1,4 @@
-# Taiko Bot
+# Taiko Bot by CrxaNode
 
 Bot ini digunakan untuk melakukan operasi deposit dan withdraw otomatis pada jaringan Taiko.
 
@@ -7,7 +7,7 @@ Bot ini digunakan untuk melakukan operasi deposit dan withdraw otomatis pada jar
 1. Clone repositori ini:
 
    ```
-   git clone https://github.com/caraka15/taiko_bot.git
+   git clone https://github.com/username/taiko_bot.git
    ```
 
 2. Masuk ke direktori proyek:
@@ -30,18 +30,21 @@ Bot ini digunakan untuk melakukan operasi deposit dan withdraw otomatis pada jar
 
 ## Konfigurasi
 
-Buka file `weth.js` dan sesuaikan pengaturan berikut sesuai kebutuhan Anda:
+Buka file `config.json` dan sesuaikan pengaturan berikut sesuai kebutuhan Anda:
 
-```javascript
-// Jumlah iterasi
-const iterations = 70; // Ubah sesuai jumlah iterasi yang diinginkan
-
-// Interval waktu dalam detik
-const interval = 30; // Ubah sesuai interval yang diinginkan (dalam detik)
+```json
+{
+  "amount": "0.0004",
+  "gasPrice": "0.09",
+  "iterations": 70,
+  "interval": 30
+}
 ```
 
-- `iterations`: Jumlah total iterasi yang akan dijalankan oleh bot.
-- `interval`: Waktu tunggu (dalam detik) antara setiap operasi deposit dan withdraw.
+- `amount`: Jumlah ETH untuk deposit/withdraw (dalam ETH)
+- `gasPrice`: Harga gas (dalam gwei)
+- `iterations`: Jumlah total iterasi yang akan dijalankan oleh bot
+- `interval`: Waktu tunggu (dalam detik) antara setiap operasi deposit dan withdraw
 
 ## Menjalankan Bot
 
@@ -51,7 +54,7 @@ Untuk menjalankan bot, gunakan perintah berikut:
 node weth.js
 ```
 
-Bot akan mulai menjalankan operasi deposit dan withdraw sesuai dengan konfigurasi yang telah Anda tetapkan.
+Bot akan mulai menjalankan operasi deposit dan withdraw sesuai dengan konfigurasi yang telah Anda tetapkan di `config.json`.
 
 ## Catatan Penting
 

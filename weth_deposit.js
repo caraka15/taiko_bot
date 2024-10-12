@@ -13,6 +13,8 @@ const privateKey = process.env.PRIVATE_KEY;
 // Menghubungkan wallet
 const wallet = new ethers.Wallet(privateKey, provider);
 
+const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
+
 // ABI
 const contractABI = JSON.parse(fs.readFileSync("abi.json", "utf8"));
 
@@ -22,12 +24,12 @@ const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 
 // Fungsi
 async function deposit() {
-  const amount = ethers.utils.parseEther("0.0004"); // Jumlah deposit
+  const amount = ethers.utils.parseEther(config.amount); // Jumlah deposit
 
   try {
     const tx = await contract.deposit({
       value: amount,
-      gasPrice: ethers.utils.parseUnits("0.09", "gwei"),
+      gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
       gasLimit: 104817,
     });
 

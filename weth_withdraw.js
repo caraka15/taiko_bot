@@ -10,6 +10,8 @@ const provider = new ethers.providers.JsonRpcProvider(
 // Private key dari wallet Anda
 const privateKey = process.env.PRIVATE_KEY;
 
+const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
+
 // Menghubungkan wallet
 const wallet = new ethers.Wallet(privateKey, provider);
 
@@ -22,11 +24,11 @@ const contractAddress = "0xA51894664A773981C6C112C43ce576f315d5b1B6";
 const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 
 async function withdraw() {
-  const amount = ethers.utils.parseEther("0.0004"); // Jumlah withdraw
+  const amount = ethers.utils.parseEther(config.amount); // Jumlah withdraw
 
   try {
     const tx = await contract.withdraw(amount, {
-      gasPrice: ethers.utils.parseUnits("0.09", "gwei"),
+      gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
       gasLimit: 100000,
     });
 
