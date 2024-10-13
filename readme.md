@@ -67,6 +67,22 @@ node weth.js
 
 Bot akan dijadwalkan untuk berjalan pada waktu yang ditentukan dalam `config.json`. Setiap kali dijalankan, bot akan melakukan operasi deposit dan withdraw untuk semua wallet yang dikonfigurasi dalam file `.env`.
 
+## Update Bot
+
+Untuk menjalankan bot, gunakan perintah berikut:
+
+```
+git fetch origin && git checkout origin/main config.json
+```
+
+```
+git pull
+```
+
+```
+npm install
+```
+
 ## Catatan Penting
 
 - Pastikan setiap wallet memiliki cukup ETH untuk biaya gas dan deposit.
