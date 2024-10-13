@@ -150,7 +150,7 @@ Halo! Saya senang memberitahu Anda bahwa tugas otomatis telah selesai dilaksanak
 
 Semua operasi deposit dan penarikan telah berhasil dilakukan sesuai dengan konfigurasi yang ditetapkan. Jika Anda ingin melihat detail lebih lanjut, silakan periksa log aplikasi.
 
-Terima kasih atas perhatian Anda. Jika ada pertanyaan atau masalah, jangan ragu untuk menghubungi tim dukungan.
+Terima kasih atas perhatian Anda. Jika ada pertanyaan atau masalah, jangan ragu untuk menghubungi tim dukungan @caraka17.
 
 <i>Pesan ini dikirim secara otomatis oleh sistem.</i>
   `;
