@@ -4,6 +4,7 @@ const util = require("util");
 const fs = require("fs");
 const schedule = require("node-schedule");
 const moment = require("moment-timezone");
+const axios = require("axios");
 
 const execPromise = util.promisify(exec);
 
@@ -44,6 +45,33 @@ function getCurrentServerTime() {
   return moment()
     .tz(config.timezone || "Asia/Jakarta")
     .format("YYYY-MM-DD HH:mm:ss");
+}
+
+async function sendTelegramNotification(message) {
+  const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
+
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "Content-Type": "application/json",
+  };
+
+  try {
+    await axios.post(
+      url,
+      {
+        chat_id: chatId,
+        text: message,
+        parse_mode: "HTML",
+      },
+      { headers }
+    );
+    console.log("Telegram notification sent successfully");
+  } catch (error) {
+    console.error("Failed to send Telegram notification:", error.message);
+  }
 }
 
 async function main() {
@@ -108,6 +136,26 @@ async function main() {
   console.log(
     `[${getCurrentServerTime()}] All iterations completed for all wallets.`
   );
+
+  // Kirim notifikasi Telegram setelah semua iterasi selesai
+  const notificationMessage = `
+<b>🎉 Tugas Otomatis Selesai</b>
+
+Halo! Saya senang memberitahu Anda bahwa tugas otomatis telah selesai dilaksanakan.
+
+<b>📊 Ringkasan:</b>
+• Total Iterasi: ${iterations}
+• Jumlah Wallet: ${privateKeys.length}
+• Waktu Selesai: ${getCurrentServerTime()}
+
+Semua operasi deposit dan penarikan telah berhasil dilakukan sesuai dengan konfigurasi yang ditetapkan. Jika Anda ingin melihat detail lebih lanjut, silakan periksa log aplikasi.
+
+Terima kasih atas perhatian Anda. Jika ada pertanyaan atau masalah, jangan ragu untuk menghubungi tim dukungan.
+
+<i>Pesan ini dikirim secara otomatis oleh sistem.</i>
+  `;
+
+  await sendTelegramNotification(notificationMessage);
 }
 
 function scheduleTask() {
