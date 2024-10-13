@@ -24,10 +24,30 @@ const contractAddress = "0xA51894664A773981C6C112C43ce576f315d5b1B6";
 const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 
 async function withdraw() {
-  const amount = ethers.utils.parseEther(config.amount); // Jumlah withdraw
-
   try {
-    const tx = await contract.withdraw(amount, {
+    // Cek balance WETH
+    const wethBalance = await contract.balanceOf(wallet.address);
+    console.log(
+      "Current WETH balance:",
+      ethers.utils.formatEther(wethBalance),
+      "WETH"
+    );
+
+    // Jika tidak ada balance WETH, keluar dari fungsi
+    if (wethBalance.isZero()) {
+      console.log("No WETH balance to withdraw");
+      return;
+    }
+
+    // Gunakan seluruh balance WETH sebagai jumlah penarikan
+    const withdrawAmount = wethBalance;
+    console.log(
+      "Withdrawing full balance:",
+      ethers.utils.formatEther(withdrawAmount),
+      "WETH"
+    );
+
+    const tx = await contract.withdraw(withdrawAmount, {
       gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
       gasLimit: 100000,
     });
