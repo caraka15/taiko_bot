@@ -4,7 +4,7 @@ const fs = require("fs");
 
 // Konfigurasi
 const provider = new ethers.providers.JsonRpcProvider(
-  "https://rpc.taiko.tools/"
+  process.env.RPC_URL || "https://rpc.taiko.tools/"
 );
 
 // Private key dari wallet Anda
@@ -18,7 +18,8 @@ const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 // ABI
 const contractABI = JSON.parse(fs.readFileSync("abi.json", "utf8"));
 
-const contractAddress = "0xA51894664A773981C6C112C43ce576f315d5b1B6";
+const contractAddress =
+  process.env.CONTRACT_ADDRESS || "0xA51894664A773981C6C112C43ce576f315d5b1B6";
 
 const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 
@@ -35,6 +36,8 @@ function getRandomDepositAmount() {
 // Fungsi
 async function deposit() {
   try {
+    console.log(`Processing deposit for wallet: ${wallet.address}`);
+
     // Cek balance
     const balance = await provider.getBalance(wallet.address);
     console.log("Current balance:", ethers.utils.formatEther(balance), "ETH");
