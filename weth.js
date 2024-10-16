@@ -231,24 +231,39 @@ function scheduleTask() {
     `[${getCurrentServerTime()}] Task scheduled. Waiting for execution time...`
   );
 
-  const now = moment().tz(timezone);
-  const nextExecution = moment()
-    .tz(timezone)
-    .set({ hour: scheduledHour, minute: scheduledMinute });
-  if (nextExecution.isBefore(now)) {
-    nextExecution.add(1, "day");
+  function updateCountdown() {
+    const now = moment().tz(timezone);
+    let nextExecution = moment()
+      .tz(timezone)
+      .set({ hour: scheduledHour, minute: scheduledMinute, second: 0 });
+
+    if (nextExecution.isSameOrBefore(now)) {
+      nextExecution.add(1, "day");
+    }
+
+    const duration = moment.duration(nextExecution.diff(now));
+    const hours = duration.hours().toString().padStart(2, "0");
+    const minutes = duration.minutes().toString().padStart(2, "0");
+    const seconds = duration.seconds().toString().padStart(2, "0");
+
+    process.stdout.write(`\rNext execution in: ${hours}:${minutes}:${seconds}`);
   }
-  const timeUntilExecution = nextExecution.diff(now);
-  console.log(
-    `Next execution will be in approximately ${moment
-      .duration(timeUntilExecution)
-      .humanize()}`
-  );
+
+  updateCountdown();
+  const countdownInterval = setInterval(updateCountdown, 1000);
+
+  job.on("scheduled", function (scheduledDate) {
+    clearInterval(countdownInterval);
+    console.log(`\n[${getCurrentServerTime()}] Task executed.`);
+
+    // Schedule the next execution
+    scheduleTask();
+  });
 }
 
 scheduleTask();
 
 process.on("SIGINT", function () {
-  console.log(`[${getCurrentServerTime()}] Script terminated.`);
+  console.log(`\n[${getCurrentServerTime()}] Script terminated.`);
   process.exit();
 });
