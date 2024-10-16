@@ -3,6 +3,7 @@ node_modules/
 
 # Mengabaikan file .env
 .env
+config.json
 
 # Mengabaikan file log
 *.log

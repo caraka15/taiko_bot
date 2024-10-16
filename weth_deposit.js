@@ -2,15 +2,15 @@ require("dotenv").config();
 const { ethers } = require("ethers");
 const fs = require("fs");
 
-// Konfigurasi
+// Configuration
 const provider = new ethers.providers.JsonRpcProvider(
   process.env.RPC_URL || "https://rpc.taiko.tools/"
 );
 
-// Private key dari wallet Anda
+// Private key from your wallet
 const privateKey = process.env.PRIVATE_KEY;
 
-// Menghubungkan wallet
+// Connect wallet
 const wallet = new ethers.Wallet(privateKey, provider);
 
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
@@ -23,7 +23,7 @@ const contractAddress =
 
 const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 
-// Fungsi untuk mendapatkan jumlah deposit acak
+// Function to get random deposit amount
 function getRandomDepositAmount() {
   const min = ethers.utils.parseEther(config.amount_min);
   const max = ethers.utils.parseEther(config.amount_max);
@@ -33,16 +33,16 @@ function getRandomDepositAmount() {
   return randomBigNumber;
 }
 
-// Fungsi
+// Function
 async function deposit() {
   try {
     console.log(`Processing deposit for wallet: ${wallet.address}`);
 
-    // Cek balance
+    // Check balance
     const balance = await provider.getBalance(wallet.address);
     console.log("Current balance:", ethers.utils.formatEther(balance), "ETH");
 
-    // Hitung jumlah deposit acak
+    // Calculate random deposit amount
     const randomAmount = getRandomDepositAmount();
     console.log(
       "Random deposit amount:",
@@ -50,7 +50,7 @@ async function deposit() {
       "ETH"
     );
 
-    // Pastikan balance cukup untuk deposit
+    // Ensure balance is sufficient for deposit
     if (balance.lt(randomAmount)) {
       console.log("Insufficient balance for deposit");
       return;
@@ -66,10 +66,16 @@ async function deposit() {
 
     const receipt = await tx.wait();
     console.log("Transaction was mined in block:", receipt.blockNumber);
+
+    // Calculate and log the transaction fee
+    const gasUsed = receipt.gasUsed;
+    const gasPrice = receipt.effectiveGasPrice;
+    const fee = gasUsed.mul(gasPrice);
+    console.log("Transaction fee:", ethers.utils.formatEther(fee), "ETH");
   } catch (error) {
     console.error("Transaction failed:", error);
   }
 }
 
-// Memanggil fungsi deposit
+// Call deposit function
 deposit().catch(console.error);

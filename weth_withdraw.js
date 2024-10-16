@@ -2,23 +2,23 @@ require("dotenv").config();
 const { ethers } = require("ethers");
 const fs = require("fs");
 
-// Konfigurasi
+// Configuration
 const provider = new ethers.providers.JsonRpcProvider(
   process.env.RPC_URL || "https://rpc.taiko.tools/"
 );
 
-// Private key dari wallet Anda
+// Private key from your wallet
 const privateKey = process.env.PRIVATE_KEY;
 
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
-// Menghubungkan wallet
+// Connect wallet
 const wallet = new ethers.Wallet(privateKey, provider);
 
 // ABI
 const contractABI = JSON.parse(fs.readFileSync("abi.json", "utf8"));
 
-// Alamat smart contract
+// Smart contract address
 const contractAddress =
   process.env.CONTRACT_ADDRESS || "0xA51894664A773981C6C112C43ce576f315d5b1B6";
 
@@ -28,7 +28,7 @@ async function withdraw() {
   try {
     console.log(`Processing withdrawal for wallet: ${wallet.address}`);
 
-    // Cek balance WETH
+    // Check WETH balance
     const wethBalance = await contract.balanceOf(wallet.address);
     console.log(
       "Current WETH balance:",
@@ -36,13 +36,13 @@ async function withdraw() {
       "WETH"
     );
 
-    // Jika tidak ada balance WETH, keluar dari fungsi
+    // If no WETH balance, exit the function
     if (wethBalance.isZero()) {
       console.log("No WETH balance to withdraw");
       return;
     }
 
-    // Gunakan seluruh balance WETH sebagai jumlah penarikan
+    // Use the entire WETH balance as the withdrawal amount
     const withdrawAmount = wethBalance;
     console.log(
       "Withdrawing full balance:",
@@ -59,10 +59,16 @@ async function withdraw() {
 
     const receipt = await tx.wait();
     console.log("Transaction was mined in block:", receipt.blockNumber);
+
+    // Calculate and log the transaction fee
+    const gasUsed = receipt.gasUsed;
+    const gasPrice = receipt.effectiveGasPrice;
+    const fee = gasUsed.mul(gasPrice);
+    console.log("Transaction fee:", ethers.utils.formatEther(fee), "ETH");
   } catch (error) {
     console.error("Transaction failed:", error);
   }
 }
 
-// Memanggil fungsi withdraw
+// Call withdraw function
 withdraw().catch(console.error);

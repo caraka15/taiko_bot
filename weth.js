@@ -5,13 +5,14 @@ const fs = require("fs");
 const schedule = require("node-schedule");
 const moment = require("moment-timezone");
 const axios = require("axios");
+const { ethers } = require("ethers");
 
 const execPromise = util.promisify(exec);
 
-// Baca konfigurasi
+// Read configuration
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
-// Fungsi untuk mendapatkan semua private keys dari .env
+// Function to get all private keys from .env
 function getPrivateKeys() {
   return Object.keys(process.env)
     .filter((key) => key.startsWith("PRIVATE_KEY_"))
@@ -74,10 +75,23 @@ async function sendTelegramNotification(message) {
   }
 }
 
+async function getEthToUsdRate() {
+  try {
+    const response = await axios.get(
+      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+    );
+    return response.data.ethereum.usd;
+  } catch (error) {
+    console.error("Failed to fetch ETH to USD rate:", error.message);
+    return null;
+  }
+}
+
 async function main() {
   const iterations = config.iterations || 70;
   const interval = config.interval || 30;
   const privateKeys = getPrivateKeys();
+  let totalFeesWei = ethers.BigNumber.from(0);
 
   for (let i = 0; i < iterations; i++) {
     console.log(
@@ -99,6 +113,12 @@ async function main() {
       console.log(depositResult.output);
 
       if (depositResult.retval === 0) {
+        // Extract and add deposit fee
+        const depositFee = extractFeeFromOutput(depositResult.output);
+        if (depositFee) {
+          totalFeesWei = totalFeesWei.add(depositFee);
+        }
+
         console.log(
           `Deposit successful for wallet ${
             j + 1
@@ -111,6 +131,11 @@ async function main() {
         console.log(withdrawResult.output);
 
         if (withdrawResult.retval === 0) {
+          // Extract and add withdraw fee
+          const withdrawFee = extractFeeFromOutput(withdrawResult.output);
+          if (withdrawFee) {
+            totalFeesWei = totalFeesWei.add(withdrawFee);
+          }
           console.log(`Withdraw successful for wallet ${j + 1}.`);
         } else {
           console.log(`Withdraw failed for wallet ${j + 1}.`);
@@ -137,7 +162,16 @@ async function main() {
     `[${getCurrentServerTime()}] All iterations completed for all wallets.`
   );
 
-  // Kirim notifikasi Telegram setelah semua iterasi selesai
+  const totalFeesEth = ethers.utils.formatEther(totalFeesWei);
+  const ethToUsdRate = await getEthToUsdRate();
+  let feeMessage = `${totalFeesEth} ETH`;
+
+  if (ethToUsdRate) {
+    const totalFeesUsd = (parseFloat(totalFeesEth) * ethToUsdRate).toFixed(2);
+    feeMessage += ` ($${totalFeesUsd})`;
+  }
+
+  // Send Telegram notification after all iterations are complete
   const notificationMessage = `
 <b>🎉 Tugas Otomatis Selesai</b>
 
@@ -147,6 +181,7 @@ Halo! Saya senang memberitahu Anda bahwa tugas otomatis telah selesai dilaksanak
 • Total Iterasi: ${iterations}
 • Jumlah Wallet: ${privateKeys.length}
 • Waktu Selesai: ${getCurrentServerTime()}
+• Total Biaya Transaksi: ${feeMessage}
 
 Semua operasi deposit dan penarikan telah berhasil dilakukan sesuai dengan konfigurasi yang ditetapkan. Jika Anda ingin melihat detail lebih lanjut, silakan periksa log aplikasi.
 
@@ -156,6 +191,14 @@ Terima kasih atas perhatian Anda. Jika ada pertanyaan atau masalah, jangan ragu 
   `;
 
   await sendTelegramNotification(notificationMessage);
+}
+
+function extractFeeFromOutput(output) {
+  const feeMatch = output.match(/Transaction fee: (\d+(\.\d+)?) ETH/);
+  if (feeMatch) {
+    return ethers.utils.parseEther(feeMatch[1]);
+  }
+  return null;
 }
 
 function scheduleTask() {
