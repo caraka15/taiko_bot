@@ -12,6 +12,9 @@ const execPromise = util.promisify(exec);
 // Read configuration
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
+// Variable untuk tracking status operasi
+let isOperationRunning = false;
+
 // Function to get all private keys from .env
 function getPrivateKeys() {
   return Object.keys(process.env)
@@ -93,6 +96,8 @@ async function main() {
   const privateKeys = getPrivateKeys();
   let totalFeesWei = ethers.BigNumber.from(0);
 
+  isOperationRunning = true; // Set status menjadi running
+
   for (let i = 0; i < iterations; i++) {
     console.log(
       `[${getCurrentServerTime()}] Iteration ${i + 1} of ${iterations}`
@@ -113,7 +118,6 @@ async function main() {
       console.log(depositResult.output);
 
       if (depositResult.retval === 0) {
-        // Extract and add deposit fee
         const depositFee = extractFeeFromOutput(depositResult.output);
         if (depositFee) {
           totalFeesWei = totalFeesWei.add(depositFee);
@@ -131,7 +135,6 @@ async function main() {
         console.log(withdrawResult.output);
 
         if (withdrawResult.retval === 0) {
-          // Extract and add withdraw fee
           const withdrawFee = extractFeeFromOutput(withdrawResult.output);
           if (withdrawFee) {
             totalFeesWei = totalFeesWei.add(withdrawFee);
@@ -157,6 +160,8 @@ async function main() {
       await sleep(interval * 1000);
     }
   }
+
+  isOperationRunning = false; // Set status menjadi not running setelah selesai
 
   console.log(
     `[${getCurrentServerTime()}] All iterations completed for all wallets.`
@@ -232,37 +237,47 @@ function scheduleTask() {
   );
 
   function updateCountdown() {
-    const now = moment().tz(timezone);
-    let nextExecution = moment()
-      .tz(timezone)
-      .set({ hour: scheduledHour, minute: scheduledMinute, second: 0 });
+    // Hanya tampilkan countdown jika tidak ada operasi yang sedang berjalan
+    if (!isOperationRunning) {
+      const now = moment().tz(timezone);
+      let nextExecution = moment()
+        .tz(timezone)
+        .set({ hour: scheduledHour, minute: scheduledMinute, second: 0 });
 
-    if (nextExecution.isSameOrBefore(now)) {
-      nextExecution.add(1, "day");
+      if (nextExecution.isSameOrBefore(now)) {
+        nextExecution.add(1, "day");
+      }
+
+      const duration = moment.duration(nextExecution.diff(now));
+      const hours = duration.hours().toString().padStart(2, "0");
+      const minutes = duration.minutes().toString().padStart(2, "0");
+      const seconds = duration.seconds().toString().padStart(2, "0");
+
+      // Menggunakan \r untuk menimpa baris yang sama
+      process.stdout.write(
+        `\r[${getCurrentServerTime()}] Next execution in: ${hours}:${minutes}:${seconds}`
+      );
     }
-
-    const duration = moment.duration(nextExecution.diff(now));
-    const hours = duration.hours().toString().padStart(2, "0");
-    const minutes = duration.minutes().toString().padStart(2, "0");
-    const seconds = duration.seconds().toString().padStart(2, "0");
-
-    process.stdout.write(`\rNext execution in: ${hours}:${minutes}:${seconds}`);
   }
 
+  // Update countdown setiap detik (1000ms)
   updateCountdown();
   const countdownInterval = setInterval(updateCountdown, 1000);
 
   job.on("scheduled", function (scheduledDate) {
     clearInterval(countdownInterval);
-    console.log(`\n[${getCurrentServerTime()}] Task executed.`);
+    // Tambahkan baris baru setelah countdown selesai
+    console.log("\n" + `[${getCurrentServerTime()}] Task executed.`);
 
     // Schedule the next execution
     scheduleTask();
   });
 }
 
+// Mulai scheduling task
 scheduleTask();
 
+// Handle program termination
 process.on("SIGINT", function () {
   console.log(`\n[${getCurrentServerTime()}] Script terminated.`);
   process.exit();
