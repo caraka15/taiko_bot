@@ -11,40 +11,47 @@ function sleep(ms) {
 }
 
 // Wait for confirmations function
-async function waitForConfirmations(provider, txHash, requiredConfirmations) {
-    process.stdout.write(`\nWait ${requiredConfirmations} confirmations`);
+async function waitForConfirmations(txHash, requiredConfirmations) {
+    process.stdout.write(`\nWaiting for at least ${requiredConfirmations} confirmations`);
 
     while (true) {
         try {
             const receipt = await provider.getTransactionReceipt(txHash);
 
-            if (!receipt) {
+            // Jika transaksi belum dimining
+            if (!receipt || !receipt.blockNumber) {
                 process.stdout.write(`\rTransaction pending...`);
                 await sleep(5000);
                 continue;
             }
 
             const currentBlock = await provider.getBlockNumber();
-            const confirmations = currentBlock - receipt.blockNumber + 1;
+            const confirmations = Math.max(currentBlock - receipt.blockNumber + 1, 0);
 
-            // Prevent error if confirmations exceed the required count
-            const progressBarLength = Math.max(0, requiredConfirmations - confirmations);
-            const progressBar = '='.repeat(Math.min(confirmations, requiredConfirmations)) + '-'.repeat(progressBarLength);
-
-            process.stdout.write(`\rConfirmations [${progressBar}] ${confirmations}/${requiredConfirmations}`);
-
-            // If confirmations have reached or exceeded the required count
-            if (confirmations >= requiredConfirmations) {
-                process.stdout.write(`\nRequired confirmations (${requiredConfirmations}) reached or exceeded!\n`);
-                return receipt;
+            // Cek apakah jumlah konfirmasi valid
+            if (confirmations < 0) {
+                console.error(`\nError: Invalid confirmation count (${confirmations}). Retrying...`);
+                await sleep(5000);
+                continue;
             }
 
-            await sleep(5000);
+            // Tampilkan jumlah konfirmasi sederhana
+            process.stdout.write(`\rConfirmations ${confirmations}/${requiredConfirmations}`);
+
+            // Jika jumlah konfirmasi sudah mencapai atau melebihi yang dibutuhkan
+            if (confirmations >= requiredConfirmations) {
+                process.stdout.write(`\nRequired confirmations (${requiredConfirmations}) reached!\n`);
+                return receipt; // Lanjutkan operasi setelah konfirmasi tercapai
+            }
+
+            await sleep(5000); // Tunggu sebelum mencoba lagi
         } catch (error) {
-            process.stdout.write(`\nError checking confirmations: ${error}\n`);
-            await sleep(5000);
+            console.error(`\nError checking confirmations: ${error}`);
+            await sleep(5000); // Tunggu sebelum mencoba lagi jika terjadi error
         }
     }
 }
+
+
 
 module.exports = { sleep, waitForConfirmations };
