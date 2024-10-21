@@ -14,6 +14,15 @@ let isOperationRunning = false;
 let completedIterations = 0;
 let totalFeesWei = ethers.BigNumber.from(0);
 
+// Constants for transaction handling
+const REQUIRED_CONFIRMATIONS = config.confirmation.required;
+const MAX_RETRIES = config.confirmation.maxRetries;
+const RETRY_DELAY = config.confirmation.retryDelay;
+
+const provider = new ethers.providers.JsonRpcProvider(
+  process.env.RPC_URL || "https://rpc.taiko.tools/"
+);
+
 function getPrivateKeys() {
   return Object.keys(process.env)
     .filter((key) => key.startsWith("PRIVATE_KEY_"))
@@ -69,76 +78,148 @@ async function getEthToUsdRate() {
   }
 }
 
-async function runCommand(command, env) {
-  try {
-    const { stdout, stderr } = await execPromise(command, {
-      env: { ...process.env, ...env },
-    });
-    return {
-      output: stdout,
-      error: stderr,
-      retval: 0,
-    };
-  } catch (error) {
-    return {
-      output: error.stdout,
-      error: error.stderr,
-      retval: error.code,
-    };
+async function waitForConfirmations(txHash, requiredConfirmations) {
+  process.stdout.write(`\nWait ${requiredConfirmations} confirmations`);
+
+  while (true) {
+    try {
+      const receipt = await provider.getTransactionReceipt(txHash);
+
+      if (!receipt) {
+        process.stdout.write(`\rTransaction pending...`);
+        await sleep(5000);
+        continue;
+      }
+
+      const currentBlock = await provider.getBlockNumber();
+      const confirmations = currentBlock - receipt.blockNumber + 1;
+
+      // Create progress bar
+      const progressBar = '='.repeat(confirmations) + '-'.repeat(requiredConfirmations - confirmations);
+      process.stdout.write(`\rConfirmations [${progressBar}] ${confirmations}/${requiredConfirmations}`);
+
+      if (confirmations >= requiredConfirmations) {
+        process.stdout.write(`\nRequired confirmations (${requiredConfirmations}) reached!\n`);
+        return receipt;
+      }
+
+      await sleep(5000);
+    } catch (error) {
+      process.stdout.write(`\nError checking confirmations: ${error}\n`);
+      await sleep(5000);
+    }
   }
 }
 
-function extractFeeFromOutput(output) {
-  const feeMatch = output.match(/Transaction fee: (\d+(\.\d+)?) ETH/);
-  if (feeMatch) {
-    return ethers.utils.parseEther(feeMatch[1]);
+async function executeTransaction(operation, description) {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`${description} - Attempt ${attempt} of ${MAX_RETRIES}`);
+      const tx = await operation();
+      console.log(`${description} - Transaction Hash:`, tx.hash);
+
+      const receipt = await waitForConfirmations(tx.hash, REQUIRED_CONFIRMATIONS);
+      console.log(`${description} - Confirmed in block:`, receipt.blockNumber);
+
+      const gasUsed = receipt.gasUsed;
+      const gasPrice = receipt.effectiveGasPrice;
+      const fee = gasUsed.mul(gasPrice);
+      console.log(`${description} - Transaction fee:`, ethers.utils.formatEther(fee), "ETH");
+
+      return { receipt, fee };
+    } catch (error) {
+      console.error(`${description} - Attempt ${attempt} failed:`, error.message);
+
+      if (attempt === MAX_RETRIES) {
+        throw new Error(`${description} - Failed after ${MAX_RETRIES} attempts: ${error.message}`);
+      }
+
+      console.log(`Waiting ${RETRY_DELAY / 1000} seconds before retry...`);
+      await sleep(RETRY_DELAY);
+    }
   }
-  return null;
 }
 
 async function processWallet(privateKey, iteration, walletIndex, interval) {
-  const env = { PRIVATE_KEY: privateKey };
+  const wallet = new ethers.Wallet(privateKey, provider);
+  const contractABI = JSON.parse(fs.readFileSync("abi.json", "utf8"));
+  const contractAddress = process.env.CONTRACT_ADDRESS || "0xA51894664A773981C6C112C43ce576f315d5b1B6";
+  const contract = new ethers.Contract(contractAddress, contractABI, wallet);
+
   console.log(
-    `[${getCurrentServerTime()}] Processing wallet ${
-      walletIndex + 1
-    } - Iteration ${iteration + 1}`
+    `[${getCurrentServerTime()}] Processing wallet ${walletIndex + 1} - Iteration ${iteration + 1}`
   );
 
-  // Deposit
-  console.log("Running deposit...");
-  const depositResult = await runCommand("node weth_deposit.js", env);
-  console.log(depositResult.output);
+  try {
+    // Check balance
+    const balance = await provider.getBalance(wallet.address);
+    console.log("Current balance:", ethers.utils.formatEther(balance), "ETH");
 
-  if (depositResult.retval === 0) {
-    const depositFee = extractFeeFromOutput(depositResult.output);
-    if (depositFee) {
-      totalFeesWei = totalFeesWei.add(depositFee);
+    // Calculate random deposit amount
+    const min = ethers.utils.parseEther(config.amount_min);
+    const max = ethers.utils.parseEther(config.amount_max);
+    const randomAmount = ethers.BigNumber.from(ethers.utils.randomBytes(32))
+      .mod(max.sub(min))
+      .add(min);
+
+    console.log("Random deposit amount:", ethers.utils.formatEther(randomAmount), "ETH");
+
+    if (balance.lt(randomAmount)) {
+      console.log("Insufficient balance for deposit");
+      return false;
     }
+
+    // Perform deposit
+    const depositResult = await executeTransaction(
+      async () => {
+        return contract.deposit({
+          value: randomAmount,
+          gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
+          gasLimit: 104817,
+        });
+      },
+      "Deposit"
+    );
+
+    totalFeesWei = totalFeesWei.add(depositResult.fee);
 
     // Wait after deposit
     console.log(`Waiting ${interval} seconds before withdraw...`);
     await sleep(interval * 1000);
 
-    // Withdraw
-    console.log("Running withdraw...");
-    const withdrawResult = await runCommand("node weth_withdraw.js", env);
-    console.log(withdrawResult.output);
+    // Check WETH balance
+    const wethBalance = await contract.balanceOf(wallet.address);
+    console.log("Current WETH balance:", ethers.utils.formatEther(wethBalance), "WETH");
 
-    if (withdrawResult.retval === 0) {
-      const withdrawFee = extractFeeFromOutput(withdrawResult.output);
-      if (withdrawFee) {
-        totalFeesWei = totalFeesWei.add(withdrawFee);
-      }
-      completedIterations++;
-      return true;
+    if (wethBalance.isZero()) {
+      console.log("No WETH balance to withdraw");
+      return false;
     }
+
+    // Perform withdraw
+    const withdrawResult = await executeTransaction(
+      async () => {
+        return contract.withdraw(wethBalance, {
+          gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
+          gasLimit: 100000,
+        });
+      },
+      "Withdraw"
+    );
+
+    totalFeesWei = totalFeesWei.add(withdrawResult.fee);
+    completedIterations++;
+    return true;
+
+  } catch (error) {
+    console.error("Wallet processing failed:", error.message);
+    return false;
   }
-  return false;
 }
 
 async function main() {
   const iterations = config.iterations || 70;
-  const interval = config.interval || 30;
+  const interval = config.interval || 1;
   const privateKeys = getPrivateKeys();
 
   isOperationRunning = true;

@@ -1,9 +1,15 @@
 {
-  "amount_min": "0.09",
-  "amount_max": "0.095",
+  "amount_min": "0.07",
+  "amount_max": "0.08",
   "gasPrice": "0.18",
   "iterations": 2,
-  "interval": 2,
+  "interval": 1,
   "timezone": "Asia/Jakarta",
-  "scheduledTime": "22:58"
+  "scheduledTime": "15:46",
+  "confirmation": {
+    "required": 5,
+    "maxRetries": 5,
+    "retryDelay": 30000,
+    "interval": 5000
+  }
 }

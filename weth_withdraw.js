@@ -1,3 +1,4 @@
+// weth_withdraw.js
 require("dotenv").config();
 const { ethers } = require("ethers");
 const fs = require("fs");
@@ -6,6 +7,11 @@ const fs = require("fs");
 const provider = new ethers.providers.JsonRpcProvider(
   process.env.RPC_URL || "https://rpc.taiko.tools/"
 );
+
+// Constants
+const REQUIRED_CONFIRMATIONS = config.confirmation.required;
+const MAX_RETRIES = config.confirmation.maxRetries;
+const RETRY_DELAY = config.confirmation.retryDelay;
 
 // Private key from your wallet
 const privateKey = process.env.PRIVATE_KEY;
@@ -24,51 +30,96 @@ const contractAddress =
 
 const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 
-async function withdraw() {
-  try {
-    console.log(`Processing withdrawal for wallet: ${wallet.address}`);
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-    // Check WETH balance
-    const wethBalance = await contract.balanceOf(wallet.address);
-    console.log(
-      "Current WETH balance:",
-      ethers.utils.formatEther(wethBalance),
-      "WETH"
-    );
+async function waitForConfirmations(txHash, requiredConfirmations) {
+  process.stdout.write(`\nWait ${requiredConfirmations} confirmations`);
 
-    // If no WETH balance, exit the function
-    if (wethBalance.isZero()) {
-      console.log("No WETH balance to withdraw");
-      return;
+  while (true) {
+    try {
+      const receipt = await provider.getTransactionReceipt(txHash);
+
+      if (!receipt) {
+        process.stdout.write(`\rTransaction pending...`);
+        await sleep(5000);
+        continue;
+      }
+
+      const currentBlock = await provider.getBlockNumber();
+      const confirmations = currentBlock - receipt.blockNumber + 1;
+
+      // Create progress bar
+      const progressBar = '='.repeat(confirmations) + '-'.repeat(requiredConfirmations - confirmations);
+      process.stdout.write(`\rConfirmations [${progressBar}] ${confirmations}/${requiredConfirmations}`);
+
+      if (confirmations >= requiredConfirmations) {
+        process.stdout.write(`\nRequired confirmations (${requiredConfirmations}) reached!\n`);
+        return receipt;
+      }
+
+      await sleep(5000);
+    } catch (error) {
+      process.stdout.write(`\nError checking confirmations: ${error}\n`);
+      await sleep(5000);
     }
-
-    // Use the entire WETH balance as the withdrawal amount
-    const withdrawAmount = wethBalance;
-    console.log(
-      "Withdrawing full balance:",
-      ethers.utils.formatEther(withdrawAmount),
-      "WETH"
-    );
-
-    const tx = await contract.withdraw(withdrawAmount, {
-      gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
-      gasLimit: 100000,
-    });
-
-    console.log("Transaction Hash:", tx.hash);
-
-    const receipt = await tx.wait();
-    console.log("Transaction was mined in block:", receipt.blockNumber);
-
-    // Calculate and log the transaction fee
-    const gasUsed = receipt.gasUsed;
-    const gasPrice = receipt.effectiveGasPrice;
-    const fee = gasUsed.mul(gasPrice);
-    console.log("Transaction fee:", ethers.utils.formatEther(fee), "ETH");
-  } catch (error) {
-    console.error("Transaction failed:", error);
   }
 }
 
-// Call withdraw function
-withdraw().catch(console.error);
+async function executeWithdraw() {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`Withdraw attempt ${attempt} of ${MAX_RETRIES}`);
+
+      // Check WETH balance
+      const wethBalance = await contract.balanceOf(wallet.address);
+      console.log("Current WETH balance:", ethers.utils.formatEther(wethBalance), "WETH");
+
+      // If no WETH balance, exit the function
+      if (wethBalance.isZero()) {
+        throw new Error("No WETH balance to withdraw");
+      }
+
+      // Use the entire WETH balance as the withdrawal amount
+      const withdrawAmount = wethBalance;
+      console.log("Withdrawing full balance:", ethers.utils.formatEther(withdrawAmount), "WETH");
+
+      const tx = await contract.withdraw(withdrawAmount, {
+        gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
+        gasLimit: 100000,
+      });
+
+      console.log("Transaction Hash:", tx.hash);
+
+      // Wait for confirmations
+      const receipt = await waitForConfirmations(tx.hash);
+      console.log("Transaction was mined in block:", receipt.blockNumber);
+
+      // Calculate and log the transaction fee
+      const gasUsed = receipt.gasUsed;
+      const gasPrice = receipt.effectiveGasPrice;
+      const fee = gasUsed.mul(gasPrice);
+      console.log("Transaction fee:", ethers.utils.formatEther(fee), "ETH");
+
+      // Transaction successful, return from function
+      return;
+
+    } catch (error) {
+      console.error(`Attempt ${attempt} failed:`, error.message);
+
+      if (attempt === MAX_RETRIES) {
+        throw new Error(`Withdraw failed after ${MAX_RETRIES} attempts: ${error.message}`);
+      }
+
+      console.log(`Waiting ${RETRY_DELAY / 1000} seconds before retry...`);
+      await sleep(RETRY_DELAY);
+    }
+  }
+}
+
+// Execute withdraw with retries
+executeWithdraw().catch(error => {
+  console.error("Final error:", error);
+  process.exit(1);
+});
