@@ -39,23 +39,33 @@ Buka file `config.json` dan sesuaikan pengaturan berikut sesuai kebutuhan Anda:
 
 ```json
 {
-  "iterations": 70,
-  "interval": 30,
+  "amount_min": "0.07",
+  "amount_max": "0.08",
+  "gasPrice": "0.18",
+  "iterations": 2,
+  "interval": 1,
   "timezone": "Asia/Jakarta",
-  "scheduledTime": "07:00",
-  "gasPrice": "0.09",
-  "amount_min": "0.0001",
-  "amount_max": "0.001"
+  "scheduledTime": "15:46",
+  "confirmation": {
+    "required": 5,
+    "maxRetries": 5,
+    "retryDelay": 30000,
+    "interval": 5000
+  }
 }
 ```
 
 - `iterations`: Jumlah total iterasi yang akan dijalankan oleh bot
-- `interval`: Waktu tunggu (dalam detik) antara setiap operasi
+- `interval`: biarkan ini berisi 1, karena fungsi ini sudah digantikan dengan fungsi blocks confirmations
 - `timezone`: Zona waktu untuk penjadwalan (gunakan format tz database)
 - `scheduledTime`: Waktu harian untuk menjalankan bot (format 24 jam)
 - `gasPrice`: Harga gas (dalam gwei)
 - `amount_min`: Jumlah minimum ETH untuk deposit (dalam ETH)
 - `amount_max`: Jumlah maksimum ETH untuk deposit (dalam ETH)
+- `required`: Waktu tunggu (dalam blocks confirmation) antara setiap operasi
+- `maxRetries`: maksimal pengulangan jika transaksi gagal
+- `retryDelay`: waktu delay pengulangan tx yang gagal jika dalam milidetik jadi 1 detik = 1000
+- `interval`: waktu delay pengecekan blocks confirmation, saran biarkan saja
 
 ## Menjalankan Bot
 
