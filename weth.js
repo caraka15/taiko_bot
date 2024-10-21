@@ -126,7 +126,6 @@ async function waitForConfirmations(txHash, requiredConfirmations) {
 async function executeTransaction(operation, description) {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      logWithBorder(chalk.cyan(`📝 ${description} - Attempt ${attempt} of ${MAX_RETRIES}`));
       const tx = await operation();
       console.log(chalk.yellow(`🔄 ${description} - Transaction Hash:`), chalk.blue(tx.hash));
 
@@ -192,7 +191,6 @@ async function processWallet(privateKey, iteration, walletIndex, interval) {
 
     totalFeesWei = totalFeesWei.add(depositResult.fee);
 
-    logWithBorder(chalk.yellow(`⏳ Waiting ${interval} seconds before withdraw...`));
     await sleep(interval * 1000);
 
     const wethBalance = await contract.balanceOf(wallet.address);
