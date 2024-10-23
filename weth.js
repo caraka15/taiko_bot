@@ -12,7 +12,7 @@ const execPromise = util.promisify(exec);
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 let isOperationRunning = false;
 let completedIterations = 0;
-let totalFeesWei = ethers.BigNumber.from(0);
+const walletFees = new Map(); // Track fees per wallet
 
 // Store points for each wallet
 const walletPoints = new Map();
@@ -166,6 +166,8 @@ async function waitForAllConfirmations(transactions, requiredConfirmations) {
 
   process.stdout.write(chalk.yellow(`\n${"-".repeat(100)}\n⏳ Waiting for confirmations...\n`));
 
+  const confirmedReceipts = [];
+
   while (confirmationStates.size > 0) {
     try {
       let statusLine = "";
@@ -184,7 +186,7 @@ async function waitForAllConfirmations(transactions, requiredConfirmations) {
 
           if (confirmations >= requiredConfirmations) {
             confirmationStates.delete(txHash);
-            pendingTransactions.set(txHash, { receipt, walletIndex: state.walletIndex });
+            confirmedReceipts.push({ receipt, walletIndex: state.walletIndex });
           } else {
             statusLine += chalk.yellow(`[Wallet-${state.walletIndex + 1}: ${confirmations}/${requiredConfirmations}] `);
           }
@@ -203,7 +205,7 @@ async function waitForAllConfirmations(transactions, requiredConfirmations) {
   }
 
   console.log(chalk.green(`\n✓ All transactions confirmed!\n${"-".repeat(100)}`));
-  return Array.from(pendingTransactions.values());
+  return confirmedReceipts;
 }
 
 async function executeTransactions(operations, description) {
@@ -233,21 +235,16 @@ async function executeTransactions(operations, description) {
     })
   );
 
-  const receipts = await waitForAllConfirmations(transactions, REQUIRED_CONFIRMATIONS);
+  const confirmedReceipts = await waitForAllConfirmations(transactions, REQUIRED_CONFIRMATIONS);
 
-  receipts.forEach(({ receipt, walletIndex }) => {
-    const gasUsed = receipt.gasUsed;
-    const gasPrice = receipt.effectiveGasPrice;
-    const fee = gasUsed.mul(gasPrice);
-    totalFeesWei = totalFeesWei.add(fee);
-    console.log(
-      chalk.magenta(`💰 Wallet-${walletIndex + 1} - ${description} fee:`),
-      chalk.yellow(ethers.utils.formatEther(fee)),
-      "ETH"
-    );
+  // Calculate fees only from confirmed transaction receipts
+  confirmedReceipts.forEach(({ receipt, walletIndex }) => {
+    const actualFee = receipt.gasUsed.mul(receipt.effectiveGasPrice);
+    const currentWalletFee = walletFees.get(walletIndex) || ethers.BigNumber.from(0);
+    walletFees.set(walletIndex, currentWalletFee.add(actualFee));
   });
 
-  return receipts;
+  return confirmedReceipts;
 }
 
 async function processWallets(walletConfigs, iteration) {
@@ -382,26 +379,20 @@ async function processWallets(walletConfigs, iteration) {
 }
 
 async function sendFinalReport() {
-  const totalFeesEth = ethers.utils.formatEther(totalFeesWei);
   const ethToUsdRate = await getEthToUsdRate();
-  let feeMessage = `${Number(totalFeesEth).toFixed(5)} ETH`;
+  let feesReport = '\n\n<b>💰 Fee Summary per Wallet:</b>';
+  let totalFeesUsd = 0;
 
-  if (ethToUsdRate) {
-    const totalFeesUsd = (parseFloat(totalFeesEth) * ethToUsdRate).toFixed(2);
-    feeMessage += ` ($${totalFeesUsd})`;
-  }
+  // Generate per-wallet fee report using only actual confirmed transaction fees
+  for (const [walletIndex, feeWei] of walletFees.entries()) {
+    const feeEth = Number(ethers.utils.formatEther(feeWei)).toFixed(8); // High precision for accurate fee display
+    const feeUsd = ethToUsdRate ? (parseFloat(feeEth) * ethToUsdRate).toFixed(2) : null;
 
-  let pointsReport = '\n\n<b>🎯 Points Summary per Wallet:</b>';
-  for (const [address, points] of walletPoints.entries()) {
-    const totalPointsEarned = points.reduce((sum, p) => sum + p.pointsEarned, 0);
-    const latestPoints = points[points.length - 1];
-    const rankChange = points[0].rank - latestPoints.rank;
+    if (feeUsd) {
+      totalFeesUsd += parseFloat(feeUsd);
+    }
 
-    pointsReport += `\n\n<code>${address.substring(0, 6)}...${address.slice(-4)}</code>:
-• Total Points Earned: ${totalPointsEarned.toFixed(2)}
-• Final Total Points: ${latestPoints.totalPoints.toFixed(2)}
-• Rank Change: ${rankChange > 0 ? `↑${rankChange}` : rankChange < 0 ? `↓${Math.abs(rankChange)}` : "No change"}
-• Current Rank: ${latestPoints.rank}`;
+    feesReport += `\n• Wallet-${walletIndex + 1}: ${feeEth} ETH${feeUsd ? ` ($${feeUsd})` : ''}`;
   }
 
   const notificationMessage = `
@@ -413,8 +404,20 @@ Halo! Saya senang memberitahu Anda bahwa tugas otomatis telah selesai dilaksanak
 • Total Iterasi Berhasil: ${completedIterations}
 • Jumlah Wallet: ${getWalletConfigs().length}
 • Waktu Selesai: ${getCurrentServerTime()}
-• Total Biaya Transaksi: ${feeMessage}
-${pointsReport}
+${feesReport}
+
+<b>🎯 Points Summary per Wallet:</b>
+${Array.from(walletPoints.entries()).map(([address, points]) => {
+    const totalPointsEarned = points.reduce((sum, p) => sum + p.pointsEarned, 0);
+    const latestPoints = points[points.length - 1];
+    const rankChange = points[0].rank - latestPoints.rank;
+
+    return `\n<code>${address.substring(0, 6)}...${address.slice(-4)}</code>:
+• Total Points Earned: ${totalPointsEarned.toFixed(2)}
+• Final Total Points: ${latestPoints.totalPoints.toFixed(2)}
+• Rank Change: ${rankChange > 0 ? `↑${rankChange}` : rankChange < 0 ? `↓${Math.abs(rankChange)}` : "No change"}
+• Current Rank: ${latestPoints.rank}`;
+  }).join('')}
 
 Semua operasi deposit dan penarikan telah selesai dilakukan sesuai dengan konfigurasi yang ditetapkan.
 
@@ -431,7 +434,7 @@ async function main() {
 
   isOperationRunning = true;
   completedIterations = 0;
-  totalFeesWei = ethers.BigNumber.from(0);
+  walletFees.clear(); // Clear previous wallet fees
 
   logWithBorder(
     chalk.cyan(`🚀 [${getCurrentServerTime()}] Starting operations with configuration:`)

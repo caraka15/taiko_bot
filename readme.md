@@ -6,122 +6,164 @@ Bot ini digunakan untuk melakukan operasi deposit dan withdraw otomatis pada jar
 
 1. Clone repositori ini:
 
-   ```
+   ```bash
    git clone https://github.com/caraka15/taiko_bot.git
    ```
 
 2. Masuk ke direktori proyek:
 
-   ```
+   ```bash
    cd taiko_bot
    ```
 
 3. Instal dependensi:
 
-   ```
+   ```bash
    npm install
    ```
 
-4. Buat file `.env` di root direktori proyek dan tambahkan konfigurasi berikut:
+4. Setup konfigurasi:
+
+   a. Menggunakan file example:
+
+   ```bash
+   cp .env.example .env
+   cp config.json.example config/config.json
    ```
-   RPC_URL=https://rpc.taiko.tools/
-   CONTRACT_ADDRESS=0xA51894664A773981C6C112C43ce576f315d5b1B6
-   PRIVATE_KEY_1=your_first_private_key_here
-   PRIVATE_KEY_2=your_second_private_key_here
-   PRIVATE_KEY_3=your_third_private_key_here
-   # Tambahkan lebih banyak private keys sesuai kebutuhan
-   ```
-   **PENTING:** Jangan pernah membagikan atau meng-commit file `.env` Anda ke repositori publik!
+
+   b. Edit file sesuai kebutuhan:
+
+   - File `.env`:
+
+     ```env
+     RPC_URL=https://rpc.taiko.tools/
+     CONTRACT_ADDRESS=0xA51894664A773981C6C112C43ce576f315d5b1B6
+     TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+     TELEGRAM_CHAT_ID=your_telegram_chat_id
+     PRIVATE_KEY_1=your_first_private_key_here
+     PRIVATE_KEY_2=your_second_private_key_here
+     # Tambahkan private key sesuai kebutuhan
+     ```
+
+   - File `config/config.json`:
+     ```json
+     {
+       "timezone": "Asia/Jakarta",
+       "scheduledTime": "07:00",
+       "iterations": 70,
+       "interval": 300,
+       "gasPrice": "0.1",
+       "amount_min": "0.001",
+       "amount_max": "0.003",
+       "confirmation": {
+         "required": 1,
+         "maxRetries": 3,
+         "retryDelay": 5000
+       },
+       "wallets": {
+         "wallet1": {
+           "amount_min": "0.001",
+           "amount_max": "0.003"
+         }
+       }
+     }
+     ```
 
 ## Konfigurasi
 
-Buka file `config.json` dan sesuaikan pengaturan berikut sesuai kebutuhan Anda:
+### Parameter Konfigurasi
 
-```json
-{
-  "amount_min": "0.07",
-  "amount_max": "0.08",
-  "gasPrice": "0.18",
-  "iterations": 2,
-  "interval": 1,
-  "timezone": "Asia/Jakarta",
-  "scheduledTime": "15:46",
-  "confirmation": {
-    "required": 5,
-    "maxRetries": 5,
-    "retryDelay": 30000,
-    "interval": 5000
-  }
-}
-```
+| Parameter     | Deskripsi                                           |
+| ------------- | --------------------------------------------------- |
+| timezone      | Zona waktu untuk penjadwalan (format: Asia/Jakarta) |
+| scheduledTime | Waktu eksekusi harian (format: HH:mm)               |
+| iterations    | Jumlah iterasi per eksekusi                         |
+| interval      | Interval antara iterasi (dalam detik)               |
+| gasPrice      | Harga gas dalam gwei                                |
+| amount_min    | Jumlah minimum deposit (dalam ETH)                  |
+| amount_max    | Jumlah maksimum deposit (dalam ETH)                 |
 
-- `iterations`: Jumlah total iterasi yang akan dijalankan oleh bot
-- `interval`: biarkan ini berisi 1, karena fungsi ini sudah digantikan dengan fungsi blocks confirmations
-- `timezone`: Zona waktu untuk penjadwalan (gunakan format tz database)
-- `scheduledTime`: Waktu harian untuk menjalankan bot (format 24 jam)
-- `gasPrice`: Harga gas (dalam gwei)
-- `amount_min`: Jumlah minimum ETH untuk deposit (dalam ETH)
-- `amount_max`: Jumlah maksimum ETH untuk deposit (dalam ETH)
-- `required`: Waktu tunggu (dalam blocks confirmation) antara setiap operasi
-- `maxRetries`: maksimal pengulangan jika transaksi gagal
-- `retryDelay`: waktu delay pengulangan tx yang gagal jika dalam milidetik jadi 1 detik = 1000
-- `interval`: waktu delay pengecekan blocks confirmation, saran biarkan saja
+### Pengaturan Konfirmasi
+
+| Parameter  | Deskripsi                                            |
+| ---------- | ---------------------------------------------------- |
+| required   | Jumlah konfirmasi yang diperlukan                    |
+| maxRetries | Jumlah maksimal percobaan ulang jika transaksi gagal |
+| retryDelay | Waktu tunggu sebelum percobaan ulang (dalam ms)      |
 
 ## Menjalankan Bot
 
-Untuk menjalankan bot, gunakan perintah berikut:
+1. Start bot:
 
-```
-node weth.js
-```
+   ```bash
+   npm start
+   ```
 
-Bot akan dijadwalkan untuk berjalan pada waktu yang ditentukan dalam `config.json`. Setiap kali dijalankan, bot akan melakukan operasi deposit dan withdraw untuk semua wallet yang dikonfigurasi dalam file `.env`.
+   atau untuk development:
+
+   ```bash
+   npm run dev
+   ```
+
+2. Bot akan:
+   - Mulai pada waktu yang ditentukan dalam `scheduledTime`
+   - Menjalankan operasi deposit dan withdraw sesuai jumlah iterasi
+   - Mengirim laporan ke Telegram setelah selesai
+
+## Fitur
+
+- 🔄 Otomatisasi deposit dan withdraw
+- 👛 Dukungan multiple wallets
+- 📊 Tracking points dan rank
+- 💰 Perhitungan fee akurat
+- 📱 Notifikasi Telegram
+- ⏰ Penjadwalan otomatis
+- 🔍 Monitoring transaksi real-time
 
 ## Update Bot
 
-Untuk menjalankan bot, gunakan perintah berikut:
-
-```
-git fetch origin && git checkout origin/main config.json
-```
-
-```
-git pull
-```
-
-```
+```bash
+git pull origin main
 npm install
 ```
 
-## Catatan Penting
-
-- Pastikan setiap wallet memiliki cukup ETH untuk biaya gas dan deposit.
-- Monitor aktivitas bot secara berkala untuk memastikan semuanya berjalan dengan lancar.
-- Jika Anda mengalami masalah atau error, periksa log output untuk informasi lebih lanjut.
-- Bot akan melakukan deposit dengan jumlah acak antara `amount_min` dan `amount_max` untuk setiap transaksi.
-- Withdraw akan selalu menggunakan seluruh balance WETH yang tersedia.
-
 ## Keamanan
 
-- Jangan pernah membagikan private key Anda.
-- Gunakan akun terpisah untuk bot ini, bukan akun utama Anda.
-- Selalu monitor aktivitas bot dan saldo akun Anda.
-- Pastikan file `.env` ditambahkan ke `.gitignore` Anda.
-
-## Kustomisasi
-
-- Anda dapat menambahkan atau mengurangi jumlah wallet dengan menambah atau mengurangi entri `PRIVATE_KEY_X` di file `.env`.
-- Untuk mengubah jadwal bot, sesuaikan `scheduledTime` dan `timezone` di `config.json`.
+- Jangan pernah membagikan private key
+- Gunakan wallet terpisah untuk bot
+- Pastikan file `.env` dalam .gitignore
+- Monitor aktivitas bot secara berkala
+- Backup private key dengan aman
 
 ## Troubleshooting
 
-- Jika bot tidak berjalan pada waktu yang dijadwalkan, pastikan timezone server Anda sesuai dengan yang dikonfigurasi.
-- Periksa log untuk melihat detail setiap transaksi dan error yang mungkin terjadi.
+1. Error transaksi:
 
-## Dukungan
+   - Periksa saldo ETH mencukupi
+   - Pastikan gas price sesuai
+   - Cek status jaringan Taiko
 
-Jika Anda mengalami masalah atau memiliki pertanyaan, silakan buka issue di repositori GitHub ini atau hubungi tim dukungan kami.
+2. Masalah penjadwalan:
+
+   - Verifikasi timezone server
+   - Cek format waktu (HH:mm)
+   - Pastikan bot berjalan
+
+3. Error Telegram:
+   - Validasi bot token dan chat ID
+   - Cek permission bot
+
+## Support
+
+Jika mengalami masalah atau ada pertanyaan:
+
+- Buka issue di GitHub
+- Hubungi: [@caraka17](https://t.me/caraka17)
 
 ## Disclaimer
 
-Penggunaan bot ini adalah risiko Anda sendiri. Pastikan Anda memahami sepenuhnya cara kerja bot dan risiko yang terkait dengan penggunaannya di jaringan blockchain.
+Bot ini disediakan "as is" tanpa jaminan apapun. Pengguna bertanggung jawab penuh atas penggunaan bot dan risiko yang mungkin timbul.
+
+## License
+
+MIT License - lihat file [LICENSE](LICENSE) untuk detail lengkap.
