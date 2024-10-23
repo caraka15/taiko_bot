@@ -84,7 +84,7 @@ Halo! Saya senang memberitahu Anda bahwa tugas otomatis telah selesai dilaksanak
 <b>📊 Ringkasan:</b>
 • Total Iterasi Berhasil: ${completedIterations || 0}
 • Jumlah Wallet: ${getWalletConfigs().length}
-• Waktu Selesai: ${getCurrentServerTime(true)} // Menggunakan parameter true untuk mendapatkan waktu tanpa warna
+• Waktu Selesai: ${getCurrentServerTime(true)}
 ${feesReport}
 ${pointsReport}
 
