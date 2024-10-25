@@ -160,9 +160,16 @@ Jika mengalami masalah atau ada pertanyaan:
 - Buka issue di GitHub
 - Hubungi: [@caraka17](https://t.me/caraka17)
 
+## Donasi
+
+Jika Anda merasa terbantu dengan bot ini, Anda dapat memberikan dukungan melalui:
+
+- Crypto: `0xede7fa099638d4f39931d2df549ac36c90dfbd26`
+- Saweria: [https://saweria.co/crxanode](https://saweria.co/crxanode)
+
 ## Disclaimer
 
-Bot ini disediakan "as is" tanpa jaminan apapun. Pengguna bertanggung jawab penuh atas penggunaan bot dan risiko yang mungkin timbul.
+Bot ini disediakan "as is" tanpa jaminan apapun. Pengguna bertanggung jawab penuh atas penggunaan bot dan resiko yang mungkin timbul.
 
 ## License
 
