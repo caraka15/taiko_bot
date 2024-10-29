@@ -2,7 +2,7 @@ const { ethers, provider } = require('../services/ethereum');
 const { sleep } = require('../utils/time');
 const { chalk } = require('../utils/logger');
 const { logWithBorder } = require('../utils/logger');
-const { CONTRACT_ADDRESS, REQUIRED_CONFIRMATIONS, MAX_RETRIES, RETRY_DELAY } = require('../constants');
+const { WETH_ADDRESS, WETH_ABI, REQUIRED_CONFIRMATIONS, MAX_RETRIES, RETRY_DELAY } = require('../constants');
 const { fetchTaikoPoints } = require('../services/points');
 const { getCurrentServerTime } = require('../utils/time');
 const fs = require('fs');
@@ -101,7 +101,7 @@ async function executeTransactions(operations, description) {
 
 async function processWallets(walletConfigs, iteration) {
     logWithBorder(
-        chalk.cyan(`📌 [${getCurrentServerTime()}] Starting iteration ${iteration + 1}`)
+        chalk.cyan(`📌 [${getCurrentServerTime()}] Starting WETH iteration ${iteration + 1}`)
     );
 
     // Initialize wallet info
@@ -126,7 +126,7 @@ async function processWallets(walletConfigs, iteration) {
 
     // Prepare deposit operations
     const depositOperations = walletInfos.map(({ wallet, balance, index, config: walletConfig }) => {
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, JSON.parse(fs.readFileSync("config/abi.json", "utf8")), wallet);
+        const contract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, wallet);
         const min = ethers.utils.parseEther(walletConfig.amount_min);
         const max = ethers.utils.parseEther(walletConfig.amount_max);
         const randomAmount = ethers.BigNumber.from(ethers.utils.randomBytes(32))
@@ -148,7 +148,7 @@ async function processWallets(walletConfigs, iteration) {
             operation: () =>
                 contract.deposit({
                     value: randomAmount,
-                    gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
+                    gasPrice: ethers.utils.parseUnits(config.weth.gasPrice, "gwei"),
                     gasLimit: 104817,
                 }),
             walletIndex: index,
@@ -160,12 +160,12 @@ async function processWallets(walletConfigs, iteration) {
         await executeTransactions(depositOperations, "Deposit");
     }
 
-    await sleep(config.interval * 1000);
+    await sleep(config.weth.interval * 1000);
 
     // Prepare withdraw operations
     const withdrawOperations = await Promise.all(
         walletInfos.map(async ({ wallet, index }) => {
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, JSON.parse(fs.readFileSync("config/abi.json", "utf8")), wallet);
+            const contract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, wallet);
             const wethBalance = await contract.balanceOf(wallet.address);
 
             console.log(
@@ -182,7 +182,7 @@ async function processWallets(walletConfigs, iteration) {
             return {
                 operation: () =>
                     contract.withdraw(wethBalance, {
-                        gasPrice: ethers.utils.parseUnits(config.gasPrice, "gwei"),
+                        gasPrice: ethers.utils.parseUnits(config.weth.gasPrice, "gwei"),
                         gasLimit: 100000,
                     }),
                 walletIndex: index,
@@ -225,9 +225,6 @@ async function processWallets(walletConfigs, iteration) {
                 });
             }
         })
-    );
-    logWithBorder(
-        chalk.green(`✓ [${getCurrentServerTime()}] Completed iteration ${iteration + 1}`)
     );
 }
 

@@ -1,23 +1,27 @@
 {
-  "gasPrice": "0.18",
-  "iterations": 1,
-  "interval": 1,
   "timezone": "Asia/Jakarta",
-  "scheduledTime": "02:11",
+  "scheduledTime": "07:00",
   "confirmation": {
-    "required": 2,
-    "maxRetries": 5,
-    "retryDelay": 30000,
-    "interval": 5000
+    "required": 1,
+    "maxRetries": 3,
+    "retryDelay": 5000
   },
-  "wallets": {
-    "wallet1": {
-      "amount_min": "0.07",
-      "amount_max": "0.08"
-    },
-    "wallet2": {
-      "amount_min": "0.002",
-      "amount_max": "0.004"
+  "weth": {
+    "iterations": 37,
+    "interval": 1,
+    "gasPrice": "0.18",
+    "amount_min": "0.001",
+    "amount_max": "0.003",
+    "wallets": {
+      "wallet1": {
+        "amount_min": "0.001",
+        "amount_max": "0.003"
+      }
     }
+  },
+  "vote": {
+    "iterations": 75,
+    "interval": 1,
+    "gasPrice": "0.14"
   }
 }

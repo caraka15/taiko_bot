@@ -31,14 +31,14 @@ async function sendTelegramNotification(message) {
     }
 }
 
-
-async function generateFinalReport(walletPoints, walletFees, completedIterations) {
+async function generateFinalReport(walletPoints, walletFees, completedIterations, mode) {
     try {
         const ethToUsdRate = await require('./ethereum').getEthToUsdRate();
-        let feesReport = '\n\n<b>💰 Fee Summary per Wallet:</b>';
+        const operationType = mode === 'weth' ? 'WETH Deposit/Withdraw' : 'Vote';
+        let feesReport = `\n\n<b>💰 ${operationType} Fee Summary per Wallet:</b>`;
+        let totalFeesEth = ethers.BigNumber.from(0);
         let totalFeesUsd = 0;
 
-        // Generate per-wallet fee report
         if (walletFees.size > 0) {
             for (const [walletIndex, feeWei] of walletFees.entries()) {
                 const feeEth = Number(ethers.utils.formatEther(feeWei)).toFixed(8);
@@ -47,20 +47,26 @@ async function generateFinalReport(walletPoints, walletFees, completedIterations
                 if (feeUsd) {
                     totalFeesUsd += parseFloat(feeUsd);
                 }
+                totalFeesEth = totalFeesEth.add(feeWei);
 
                 feesReport += `\n• Wallet-${walletIndex + 1}: ${feeEth} ETH${feeUsd ? ` ($${feeUsd})` : ''}`;
             }
+
+            const totalFeesEthFormatted = ethers.utils.formatEther(totalFeesEth);
+            feesReport += `\n\n<b>Total Fees:</b> ${Number(totalFeesEthFormatted).toFixed(8)} ETH${totalFeesUsd ? ` ($${totalFeesUsd.toFixed(2)})` : ''}`;
+            feesReport += `\n<b>Average Fee per Wallet:</b> ${(Number(totalFeesEthFormatted) / walletFees.size).toFixed(8)} ETH${totalFeesUsd ? ` ($${(totalFeesUsd / walletFees.size).toFixed(2)})` : ''}`;
         } else {
             feesReport += "\n• No fees recorded";
         }
 
-        // Generate points report
         let pointsReport = '';
+        let totalPointsEarnedAll = 0;
         if (walletPoints.size > 0) {
             pointsReport = '\n\n<b>🎯 Points Summary per Wallet:</b>';
             for (const [address, points] of walletPoints.entries()) {
                 if (points && points.length > 0) {
                     const totalPointsEarned = points.reduce((sum, p) => sum + p.pointsEarned, 0);
+                    totalPointsEarnedAll += totalPointsEarned;
                     const latestPoints = points[points.length - 1];
                     const initialPoints = points[0];
                     const rankChange = initialPoints.rank - latestPoints.rank;
@@ -72,23 +78,31 @@ async function generateFinalReport(walletPoints, walletFees, completedIterations
 • Current Rank: ${latestPoints.rank}`;
                 }
             }
+
+            const totalTx = completedIterations * getWalletConfigs().length;
+            pointsReport += `\n\n<b>Total Points Earned (All Wallets):</b> ${totalPointsEarnedAll.toFixed(2)}`;
+            pointsReport += `\n<b>Average Points per Wallet:</b> ${(totalPointsEarnedAll / walletPoints.size).toFixed(2)}`;
+            if (totalTx > 0) {
+                pointsReport += `\n<b>Average Points per TX:</b> ${(totalPointsEarnedAll / totalTx).toFixed(2)}`;
+            }
         } else {
             pointsReport = '\n\n<b>🎯 Points Summary:</b>\n• No points recorded';
         }
 
         const notificationMessage = `
-<b>🎉 Tugas Otomatis Selesai</b>
+<b>🎉 ${operationType} Task Completed</b>
 
-Halo! Saya senang memberitahu Anda bahwa tugas otomatis telah selesai dilaksanakan.
+Halo! Saya senang memberitahu Anda bahwa tugas ${operationType} telah selesai dilaksanakan.
 
 <b>📊 Ringkasan:</b>
+• Mode: ${operationType}
 • Total Iterasi Berhasil: ${completedIterations || 0}
 • Jumlah Wallet: ${getWalletConfigs().length}
 • Waktu Selesai: ${getCurrentServerTime(true)}
 ${feesReport}
 ${pointsReport}
 
-Semua operasi deposit dan penarikan telah selesai dilakukan sesuai dengan konfigurasi yang ditetapkan.
+Semua operasi telah selesai dilakukan sesuai dengan konfigurasi yang ditetapkan.
 
 Terima kasih atas perhatian Anda. Jika ada pertanyaan atau masalah, jangan ragu untuk menghubungi tim dukungan @caraka17.
 
@@ -102,6 +116,7 @@ Terima kasih atas perhatian Anda. Jika ada pertanyaan atau masalah, jangan ragu 
 
 An error occurred while generating the final report: ${error.message}
 
+• Mode: ${mode.toUpperCase()}
 • Total Iterasi Berhasil: ${completedIterations || 0}
 • Waktu: ${getCurrentServerTime(true)}
 

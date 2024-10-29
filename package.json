@@ -1,15 +1,17 @@
 {
-  "name": "ether",
+  "name": "taiko-automation",
   "version": "1.0.0",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start:weth": "cross-env MODE=weth node src/index.js",
+    "start:vote": "cross-env MODE=vote node src/index.js",
+    "dev:weth": "cross-env MODE=weth nodemon src/index.js",
+    "dev:vote": "cross-env MODE=vote nodemon src/index.js"
   },
   "dependencies": {
     "axios": "^1.7.2",
     "chalk": "^4.1.2",
+    "cross-env": "^7.0.3",
     "dotenv": "^16.4.5",
     "ethers": "^5.7.2",
     "moment-timezone": "^0.5.46",
@@ -18,9 +20,5 @@
   "devDependencies": {
     "hardhat": "^2.22.6",
     "nodemon": "^3.0.3"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+  }
 }

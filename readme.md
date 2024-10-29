@@ -1,6 +1,6 @@
 # Taiko Bot by CrxaNode
 
-Bot ini digunakan untuk melakukan operasi deposit dan withdraw otomatis pada jaringan Taiko dengan dukungan untuk multiple wallets.
+Bot ini digunakan untuk melakukan operasi otomatis pada jaringan Taiko dengan dukungan untuk multiple wallets dan dua mode operasi: WETH (Deposit/Withdraw) dan Vote.
 
 ## Persiapan
 
@@ -37,7 +37,8 @@ Bot ini digunakan untuk melakukan operasi deposit dan withdraw otomatis pada jar
 
      ```env
      RPC_URL=https://rpc.taiko.tools/
-     CONTRACT_ADDRESS=0xA51894664A773981C6C112C43ce576f315d5b1B6
+     WETH_CONTRACT_ADDRESS=0xA51894664A773981C6C112C43ce576f315d5b1B6
+     VOTE_CONTRACT_ADDRESS=0x4D1E2145082d0AB0fDa4a973dC4887C7295e21aB
      TELEGRAM_BOT_TOKEN=your_telegram_bot_token
      TELEGRAM_CHAT_ID=your_telegram_chat_id
      PRIVATE_KEY_1=your_first_private_key_here
@@ -50,75 +51,216 @@ Bot ini digunakan untuk melakukan operasi deposit dan withdraw otomatis pada jar
      {
        "timezone": "Asia/Jakarta",
        "scheduledTime": "07:00",
-       "iterations": 70,
-       "interval": 300,
        "gasPrice": "0.1",
-       "amount_min": "0.001",
-       "amount_max": "0.003",
        "confirmation": {
          "required": 1,
          "maxRetries": 3,
          "retryDelay": 5000
        },
-       "wallets": {
-         "wallet1": {
-           "amount_min": "0.001",
-           "amount_max": "0.003"
+       "weth": {
+         "iterations": 35,
+         "interval": 300,
+         "amount_min": "0.001",
+         "amount_max": "0.003",
+         "wallets": {
+           "wallet1": {
+             "amount_min": "0.001",
+             "amount_max": "0.003"
+           }
          }
+       },
+       "vote": {
+         "iterations": 70,
+         "interval": 300
        }
      }
      ```
 
+## Mode Operasi
+
+Bot ini mendukung dua mode operasi:
+
+### 1. Mode WETH
+
+- Melakukan deposit ETH ke WETH
+- Melakukan withdraw WETH ke ETH
+- Konfigurasi jumlah dan range deposit per wallet
+- Command: `npm run start:weth`
+
+### 2. Mode Vote
+
+- Melakukan vote transaction
+- Iterasi 2x lebih banyak dari mode WETH
+- Tidak memerlukan konfigurasi amount
+- Command: `npm run start:vote`
+
 ## Konfigurasi
 
-### Parameter Konfigurasi
+### Parameter Umum
 
-| Parameter     | Deskripsi                                           |
-| ------------- | --------------------------------------------------- |
-| timezone      | Zona waktu untuk penjadwalan (format: Asia/Jakarta) |
-| scheduledTime | Waktu eksekusi harian (format: HH:mm)               |
-| iterations    | Jumlah iterasi per eksekusi                         |
-| interval      | Interval antara iterasi (dalam detik)               |
-| gasPrice      | Harga gas dalam gwei                                |
-| amount_min    | Jumlah minimum deposit (dalam ETH)                  |
-| amount_max    | Jumlah maksimum deposit (dalam ETH)                 |
+|
+Parameter
+|
+Deskripsi
+|
+|
+
+---
+
+## |
+
+|
+|
+timezone
+|
+Zona waktu untuk penjadwalan (format: Asia/Jakarta)
+|
+|
+scheduledTime
+|
+Waktu eksekusi harian (format: HH:mm)
+|
+
+### Parameter WETH Mode
+
+|
+Parameter
+|
+Deskripsi
+|
+|
+
+---
+
+## |
+
+|
+|
+iterations
+|
+Jumlah iterasi deposit-withdraw
+|
+|
+interval
+|
+Interval antara iterasi (dalam detik)
+|
+|
+gasPrice
+|
+Harga gas dalam gwei untuk transaksi WETH
+|
+|
+amount_min
+|
+Jumlah minimum deposit (dalam ETH)
+|
+|
+amount_max
+|
+Jumlah maksimum deposit (dalam ETH)
+|
+
+### Parameter Vote Mode
+
+|
+Parameter
+|
+Deskripsi
+|
+|
+
+---
+
+## |
+
+|
+|
+iterations
+|
+Jumlah iterasi voting (2x WETH iterations)
+|
+|
+interval
+|
+Interval antara votes (dalam detik)
+|
+|
+gasPrice
+|
+Harga gas dalam gwei untuk transaksi Vote
+|
 
 ### Pengaturan Konfirmasi
 
-| Parameter  | Deskripsi                                            |
-| ---------- | ---------------------------------------------------- |
-| required   | Jumlah konfirmasi yang diperlukan                    |
-| maxRetries | Jumlah maksimal percobaan ulang jika transaksi gagal |
-| retryDelay | Waktu tunggu sebelum percobaan ulang (dalam ms)      |
+|
+Parameter
+|
+Deskripsi
+|
+|
+
+---
+
+## |
+
+|
+|
+required
+|
+Jumlah konfirmasi yang diperlukan
+|
+|
+maxRetries
+|
+Jumlah maksimal percobaan ulang jika transaksi gagal
+|
+|
+retryDelay
+|
+Waktu tunggu sebelum percobaan ulang (dalam ms)
+|
 
 ## Menjalankan Bot
 
-1. Start bot:
+1. Mode WETH:
 
    ```bash
-   npm start
+   npm run start:weth
    ```
 
    atau untuk development:
 
    ```bash
-   npm run dev
+   npm run dev:weth
    ```
 
-2. Bot akan:
-   - Mulai pada waktu yang ditentukan dalam `scheduledTime`
-   - Menjalankan operasi deposit dan withdraw sesuai jumlah iterasi
-   - Mengirim laporan ke Telegram setelah selesai
+2. Mode Vote:
+   ```bash
+   npm run start:vote
+   ```
+   atau untuk development:
+   ```bash
+   npm run dev:vote
+   ```
+
+Bot akan:
+
+- Mulai pada waktu yang ditentukan dalam `scheduledTime`
+- Menjalankan operasi sesuai mode yang dipilih
+- Melacak points dan biaya gas
+- Mengirim laporan detail ke Telegram setelah selesai
 
 ## Fitur
 
-- 🔄 Otomatisasi deposit dan withdraw
+- 🔄 Dual mode: WETH dan Vote
 - 👛 Dukungan multiple wallets
 - 📊 Tracking points dan rank
-- 💰 Perhitungan fee akurat
-- 📱 Notifikasi Telegram
+- 💰 Perhitungan fee akurat per wallet
+- 📱 Notifikasi Telegram dengan report detail
 - ⏰ Penjadwalan otomatis
 - 🔍 Monitoring transaksi real-time
+- 📈 Statistik performa per wallet
 
 ## Update Bot
 
