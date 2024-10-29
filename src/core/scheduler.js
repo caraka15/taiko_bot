@@ -121,6 +121,33 @@ function cleanupJob() {
     resetData();
 }
 
+function updateCountdown(scheduledHour, scheduledMinute, timezone) {
+    function update() {
+        if (!isOperationRunning) {
+            const now = moment().tz(timezone);
+            let nextExecution = moment()
+                .tz(timezone)
+                .set({ hour: scheduledHour, minute: scheduledMinute, second: 0 });
+
+            if (nextExecution.isSameOrBefore(now)) {
+                nextExecution.add(1, "day");
+            }
+
+            const duration = moment.duration(nextExecution.diff(now));
+            const hours = duration.hours().toString().padStart(2, "0");
+            const minutes = duration.minutes().toString().padStart(2, "0");
+            const seconds = duration.seconds().toString().padStart(2, "0");
+
+            process.stdout.write(
+                chalk.cyan(`\r⏳ [${getCurrentServerTime()}] Next execution in: ${chalk.yellow(`${hours}:${minutes}:${seconds}`)}`)
+            );
+        }
+    }
+
+    update();
+    return setInterval(update, 1000);
+}
+
 function scheduleTask() {
     // Cleanup sebelum membuat job baru
     cleanupJob();
@@ -170,9 +197,7 @@ function scheduleTask() {
     return activeJob;
 }
 
-// ... rest of the code (updateCountdown function) remains the same ...
-
-// Tambahkan handler untuk cleanup saat aplikasi dihentikan
+// Handle cleanup on process termination
 process.on('SIGINT', () => {
     cleanupJob();
     logWithBorder(
