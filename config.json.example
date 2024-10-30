@@ -1,6 +1,6 @@
 {
   "timezone": "Asia/Jakarta",
-  "scheduledTime": "07:00",
+  "scheduledTime": "18:24",
   "confirmation": {
     "required": 1,
     "maxRetries": 3,
@@ -16,12 +16,17 @@
       "wallet1": {
         "amount_min": "0.001",
         "amount_max": "0.003"
+      },
+      "wallet2": {
+        "amount_min": "0.00001",
+        "amount_max": "0.00003"
       }
     }
   },
   "vote": {
-    "iterations": 75,
+    "iterations": 76,
     "interval": 1,
-    "gasPrice": "0.14"
+    "maxFee": "0.25",
+    "maxPriorityFee": "0.11"
   }
 }

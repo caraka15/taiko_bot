@@ -16,7 +16,8 @@ async function executeVoteTransaction(wallet, index) {
         console.log(chalk.yellow(`🗳️ Wallet-${index + 1} Executing vote...`));
 
         const tx = await contract.vote({
-            gasPrice: ethers.utils.parseUnits(config.vote.gasPrice, "gwei"),
+            maxFeePerGas: ethers.utils.parseUnits(config.vote.maxFee, "gwei"),
+            maxPriorityFeePerGas: ethers.utils.parseUnits(config.vote.maxPriorityFee, "gwei"),
             gasLimit: 100000,
         });
 
