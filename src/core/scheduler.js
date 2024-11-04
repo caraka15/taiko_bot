@@ -148,13 +148,11 @@ function updateCountdown(scheduledHour, scheduledMinute, timezone) {
     return setInterval(update, 1000);
 }
 
-function scheduleTask() {
-    // Cleanup sebelum membuat job baru
-    cleanupJob();
-
+async function scheduleTask() {
     const timezone = config.timezone || "Asia/Jakarta";
     const scheduledTime = config.scheduledTime || "07:00";
     const [scheduledHour, scheduledMinute] = scheduledTime.split(":").map(Number);
+    const runNow = process.env.NOW === 'true';
 
     logWithBorder(
         chalk.cyan(`⚙️ [${getCurrentServerTime()}] Current configuration:`)
@@ -165,6 +163,7 @@ function scheduleTask() {
                 mode: MODE,
                 timezone,
                 scheduledTime,
+                runNow,
                 ...config,
                 wallets: `${getWalletConfigs().length} wallets`
             },
@@ -173,11 +172,18 @@ function scheduleTask() {
         ))
     );
 
+    if (runNow) {
+        logWithBorder(
+            chalk.green(`✨ [${getCurrentServerTime()}] Starting immediate execution...`)
+        );
+        await main().catch(console.error);
+    }
+
     logWithBorder(
-        chalk.cyan(`🕒 [${getCurrentServerTime()}] Scheduling ${MODE.toUpperCase()} task to run at ${scheduledTime} ${timezone}`)
+        chalk.cyan(`🕒 [${getCurrentServerTime()}] Scheduling task to run at ${scheduledTime} ${timezone}`)
     );
 
-    activeJob = schedule.scheduleJob(
+    const job = schedule.scheduleJob(
         { hour: scheduledHour, minute: scheduledMinute, tz: timezone },
         function () {
             logWithBorder(
@@ -187,14 +193,17 @@ function scheduleTask() {
         }
     );
 
-    countdownInterval = updateCountdown(scheduledHour, scheduledMinute, timezone);
+    const countdownInterval = updateCountdown(scheduledHour, scheduledMinute, timezone);
 
-    activeJob.on("scheduled", function () {
-        cleanupJob();
+    job.on("scheduled", function () {
+        clearInterval(countdownInterval);
+        logWithBorder(
+            chalk.green(`✓ [${getCurrentServerTime()}] Task executed.`)
+        );
         scheduleTask();
     });
 
-    return activeJob;
+    return job;
 }
 
 // Handle cleanup on process termination

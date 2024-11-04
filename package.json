@@ -5,8 +5,12 @@
   "scripts": {
     "start:weth": "cross-env MODE=weth node src/index.js",
     "start:vote": "cross-env MODE=vote node src/index.js",
+    "start:weth:now": "cross-env MODE=weth NOW=true node src/index.js",
+    "start:vote:now": "cross-env MODE=vote NOW=true node src/index.js",
     "dev:weth": "cross-env MODE=weth nodemon src/index.js",
-    "dev:vote": "cross-env MODE=vote nodemon src/index.js"
+    "dev:vote": "cross-env MODE=vote nodemon src/index.js",
+    "dev:weth:now": "cross-env MODE=weth NOW=true nodemon src/index.js",
+    "dev:vote:now": "cross-env MODE=vote NOW=true nodemon src/index.js"
   },
   "dependencies": {
     "axios": "^1.7.2",
