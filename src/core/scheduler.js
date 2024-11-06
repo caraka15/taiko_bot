@@ -2,8 +2,8 @@ const schedule = require('node-schedule');
 const { getCurrentServerTime, moment, sleep } = require('../utils/time');
 const { logWithBorder } = require('../utils/logger');
 const { chalk } = require('../utils/logger');
-const { processWallets } = require('./transaction');
-const { processVoteWallets } = require('./vote');
+const { processWallets, walletPoints: wethPoints, walletFees: wethFees } = require('./transaction');
+const { processVoteWallets, walletPoints: votePoints, walletFees: voteFees } = require('./vote');
 const { getWalletConfigs } = require('../utils/wallet');
 const { generateFinalReport, sendTelegramNotification } = require('../services/telegram');
 const config = require('../../config/config.json');
@@ -15,59 +15,68 @@ let countdownInterval = null;
 
 const MODE = process.env.MODE || 'weth';
 
-// Fungsi untuk reset semua data
-function resetData() {
-    completedIterations = 0;
-    isOperationRunning = false;
-
-    // Reset data dari modul transaction dan vote
-    const { walletFees: wethFees, walletPoints: wethPoints } = require('./transaction');
-    const { walletFees: voteFees, walletPoints: votePoints } = require('./vote');
-
-    wethFees.clear();
-    wethPoints.clear();
-    voteFees.clear();
-    votePoints.clear();
-}
-
 async function main() {
-    // Reset data setiap kali main dijalankan
-    resetData();
+    // Validasi mode
+    if (!['weth', 'vote'].includes(MODE)) {
+        throw new Error(`Invalid mode: ${MODE}. Must be either 'weth' or 'vote'`);
+    }
 
+    // Ambil config sesuai mode
     const modeConfig = MODE === 'weth' ? config.weth : config.vote;
+
+    // Log config untuk verifikasi
+    console.log('Mode Config:', {
+        mode: MODE,
+        iterations: modeConfig.iterations,
+        interval: modeConfig.interval
+    });
+
+    // Validasi iterations sesuai mode
     const iterations = modeConfig.iterations;
+    if (!iterations || iterations <= 0) {
+        throw new Error(`Invalid iterations for ${MODE} mode: ${iterations}`);
+    }
+
     const walletConfigs = getWalletConfigs();
 
+    // Reset semua state
     isOperationRunning = true;
+    completedIterations = 0;
 
     logWithBorder(
         chalk.cyan(`🚀 [${getCurrentServerTime()}] Starting ${MODE.toUpperCase()} operations with configuration:`)
     );
 
-    console.log(chalk.yellow(`Mode: ${MODE.toUpperCase()}`));
-    console.log(chalk.yellow(`Iterations: ${iterations}`));
-    console.log(chalk.yellow(`Interval: ${modeConfig.interval} seconds`));
-    console.log(chalk.yellow(`Gas Price: ${modeConfig.gasPrice} gwei`));
-    console.log(chalk.yellow("\nWallet Configurations:"));
+    // Log detail konfigurasi
+    console.log(chalk.yellow('Configuration Details:'));
+    console.log(chalk.yellow(`• Mode: ${MODE.toUpperCase()}`));
+    console.log(chalk.yellow(`• Iterations: ${iterations}`));
+    console.log(chalk.yellow(`• Interval: ${modeConfig.interval} seconds`));
 
     if (MODE === 'weth') {
-        walletConfigs.forEach(({ config: walletConfig, index }) => {
-            console.log(chalk.yellow(`Wallet-${index + 1}:`));
-            console.log(chalk.yellow(JSON.stringify(walletConfig, null, 2)));
-        });
+        console.log(chalk.yellow(`• Gas Price: ${modeConfig.gasPrice} gwei`));
     } else {
-        console.log(chalk.yellow(`Total Wallets: ${walletConfigs.length}`));
-        walletConfigs.forEach(({ index }) => {
-            console.log(chalk.yellow(`Wallet-${index + 1}: Vote Mode - No amount configuration needed`));
-        });
+        console.log(chalk.yellow(`• Max Fee: ${modeConfig.maxFee} gwei`));
+        console.log(chalk.yellow(`• Max Priority Fee: ${modeConfig.maxPriorityFee} gwei`));
     }
 
     try {
+        // Tentukan points dan fees berdasarkan mode
+        const { walletPoints, walletFees } = MODE === 'weth'
+            ? { walletPoints: wethPoints, walletFees: wethFees }
+            : { walletPoints: votePoints, walletFees: voteFees };
+
+        // Reset points dan fees untuk sesi baru
+        walletPoints.clear();
+        walletFees.clear();
+
         for (let i = 0; i < iterations; i++) {
             if (!isOperationRunning) {
                 console.log(chalk.yellow("\n⚠️ Operation stopped by user or system"));
                 break;
             }
+
+            console.log(chalk.cyan(`\nStarting ${MODE} iteration ${i + 1}/${iterations}`));
 
             if (MODE === 'weth') {
                 await processWallets(walletConfigs, i);
@@ -87,25 +96,22 @@ async function main() {
         }
 
         if (completedIterations > 0) {
-            const { walletFees, walletPoints } = MODE === 'weth'
-                ? require('./transaction')
-                : require('./vote');
-
             const finalReport = await generateFinalReport(walletPoints, walletFees, completedIterations, MODE);
             await sendTelegramNotification(finalReport);
         }
+
     } catch (error) {
-        console.error(chalk.red(`Error in main execution: ${error.message}`));
+        console.error(chalk.red(`Error in ${MODE} execution: ${error.message}`));
         if (completedIterations > 0) {
-            const { walletFees, walletPoints } = MODE === 'weth'
-                ? require('./transaction')
-                : require('./vote');
+            const { walletPoints, walletFees } = MODE === 'weth'
+                ? { walletPoints: wethPoints, walletFees: wethFees }
+                : { walletPoints: votePoints, walletFees: voteFees };
+
             const errorReport = await generateFinalReport(walletPoints, walletFees, completedIterations, MODE);
             await sendTelegramNotification(errorReport);
         }
     } finally {
         isOperationRunning = false;
-        resetData();
     }
 }
 
@@ -118,7 +124,7 @@ function cleanupJob() {
         clearInterval(countdownInterval);
         countdownInterval = null;
     }
-    resetData();
+    isOperationRunning = false;
 }
 
 function updateCountdown(scheduledHour, scheduledMinute, timezone) {
@@ -154,6 +160,9 @@ async function scheduleTask() {
     const [scheduledHour, scheduledMinute] = scheduledTime.split(":").map(Number);
     const runNow = process.env.NOW === 'true';
 
+    // Cleanup any existing jobs
+    cleanupJob();
+
     logWithBorder(
         chalk.cyan(`⚙️ [${getCurrentServerTime()}] Current configuration:`)
     );
@@ -177,51 +186,38 @@ async function scheduleTask() {
             chalk.green(`✨ [${getCurrentServerTime()}] Starting immediate execution...`)
         );
         await main().catch(console.error);
+        // Reset NOW flag setelah eksekusi
+        process.env.NOW = 'false';
     }
 
     logWithBorder(
         chalk.cyan(`🕒 [${getCurrentServerTime()}] Scheduling task to run at ${scheduledTime} ${timezone}`)
     );
 
-    const job = schedule.scheduleJob(
+    activeJob = schedule.scheduleJob(
         { hour: scheduledHour, minute: scheduledMinute, tz: timezone },
         function () {
-            logWithBorder(
-                chalk.green(`✨ [${getCurrentServerTime()}] Starting scheduled task...`)
-            );
-            main().catch(console.error);
+            if (!isOperationRunning) {
+                logWithBorder(
+                    chalk.green(`✨ [${getCurrentServerTime()}] Starting scheduled task...`)
+                );
+                main().catch(console.error);
+            }
         }
     );
 
-    const countdownInterval = updateCountdown(scheduledHour, scheduledMinute, timezone);
+    countdownInterval = updateCountdown(scheduledHour, scheduledMinute, timezone);
 
-    job.on("scheduled", function () {
-        clearInterval(countdownInterval);
+    process.on('SIGINT', () => {
+        cleanupJob();
         logWithBorder(
-            chalk.green(`✓ [${getCurrentServerTime()}] Task executed.`)
+            chalk.red(`👋 [${getCurrentServerTime()}] Script terminated.`)
         );
-        scheduleTask();
+        process.exit(0);
     });
 
-    return job;
+    return activeJob;
 }
-
-// Handle cleanup on process termination
-process.on('SIGINT', () => {
-    cleanupJob();
-    logWithBorder(
-        chalk.red(`👋 [${getCurrentServerTime()}] Script terminated.`)
-    );
-    process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-    cleanupJob();
-    logWithBorder(
-        chalk.red(`👋 [${getCurrentServerTime()}] Script terminated.`)
-    );
-    process.exit(0);
-});
 
 module.exports = {
     scheduleTask,
