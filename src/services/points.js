@@ -19,7 +19,7 @@ async function fetchTaikoPoints(address) {
         };
 
         const response = await axios.get(
-            `https://trailblazer.mainnet.taiko.xyz/s2/user/rank?address=${address}`,
+            `https://trailblazer.mainnet.taiko.xyz/s3/user/rank?address=${address}`,
             {
                 headers,
                 timeout: 10000
@@ -31,7 +31,8 @@ async function fetchTaikoPoints(address) {
         }
 
         const breakdown = response.data.breakdown;
-        const totalPoints = breakdown.reduce((sum, item) => sum + item.total_points, 0);
+        // Total points now comes directly from the API as totalScore
+        const totalPoints = response.data.totalScore || response.data.score || 0;
 
         return {
             transactionPoints: breakdown.find(b => b.event === "Transaction")?.total_points || 0,

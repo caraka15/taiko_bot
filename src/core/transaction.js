@@ -1,3 +1,4 @@
+// transaction.js
 const { ethers, provider } = require('../services/ethereum');
 const { sleep } = require('../utils/time');
 const { chalk } = require('../utils/logger');
@@ -14,10 +15,29 @@ const walletFees = new Map();
 const walletPoints = new Map();
 
 let currentProviderIndex = 0;
+let lastProviderChangeTime = Date.now();
+const PROVIDER_SWITCH_INTERVAL = 30000; // 30 seconds
+
 function getNextPublicProvider() {
-    const provider = publicProviders[currentProviderIndex];
-    currentProviderIndex = (currentProviderIndex + 1) % publicProviders.length;
-    return provider;
+    const currentTime = Date.now();
+    if (currentTime - lastProviderChangeTime > PROVIDER_SWITCH_INTERVAL) {
+        currentProviderIndex = (currentProviderIndex + 1) % publicProviders.length;
+        lastProviderChangeTime = currentTime;
+    }
+    return publicProviders[currentProviderIndex];
+}
+
+async function retryGetReceipt(provider, txHash, maxAttempts = 3) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const receipt = await provider.getTransactionReceipt(txHash);
+            if (receipt) return receipt;
+        } catch (error) {
+            console.log(chalk.yellow(`Receipt fetch attempt ${attempt} failed, retrying...`));
+        }
+        if (attempt < maxAttempts) await sleep(2000);
+    }
+    return null;
 }
 
 async function waitForAllConfirmations(transactions, requiredConfirmations) {
@@ -35,22 +55,30 @@ async function waitForAllConfirmations(transactions, requiredConfirmations) {
             await Promise.all(
                 Array.from(confirmationStates.entries()).map(async ([txHash, state]) => {
                     const publicProvider = getNextPublicProvider();
-                    const receipt = await publicProvider.getTransactionReceipt(txHash);
+                    const receipt = await retryGetReceipt(publicProvider, txHash);
 
                     if (!receipt || !receipt.blockNumber) {
                         statusLine += chalk.yellow(`[Wallet-${state.walletIndex + 1}: Pending] `);
                         return;
                     }
 
-                    const currentBlock = await publicProvider.getBlockNumber();
-                    const confirmations = Math.max(currentBlock - receipt.blockNumber + 1, 0);
+                    try {
+                        const currentBlock = await publicProvider.getBlockNumber();
+                        const confirmations = Math.max(currentBlock - receipt.blockNumber + 1, 0);
 
-                    if (confirmations >= requiredConfirmations) {
-                        const mainReceipt = await provider.getTransactionReceipt(txHash);
-                        confirmationStates.delete(txHash);
-                        confirmedReceipts.push({ receipt: mainReceipt, walletIndex: state.walletIndex });
-                    } else {
-                        statusLine += chalk.yellow(`[Wallet-${state.walletIndex + 1}: ${confirmations}/${requiredConfirmations} blocks] `);
+                        if (confirmations >= requiredConfirmations) {
+                            const mainReceipt = await retryGetReceipt(provider, txHash);
+                            if (mainReceipt && mainReceipt.gasUsed && mainReceipt.effectiveGasPrice) {
+                                confirmationStates.delete(txHash);
+                                confirmedReceipts.push({ receipt: mainReceipt, walletIndex: state.walletIndex });
+                            } else {
+                                console.log(chalk.red(`⚠️ Invalid receipt data for transaction ${txHash}`));
+                            }
+                        } else {
+                            statusLine += chalk.yellow(`[Wallet-${state.walletIndex + 1}: ${confirmations}/${requiredConfirmations} blocks] `);
+                        }
+                    } catch (blockError) {
+                        console.log(chalk.red(`Error getting block info: ${blockError.message}`));
                     }
                 })
             );
@@ -61,6 +89,7 @@ async function waitForAllConfirmations(transactions, requiredConfirmations) {
                 await sleep(5000);
             }
         } catch (error) {
+            console.log(chalk.red(`Error in confirmation loop: ${error.message}`));
             await sleep(5000);
         }
     }
@@ -79,6 +108,9 @@ async function executeTransactions(operations, description) {
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
                     const tx = await operation();
+                    if (!tx || !tx.hash) {
+                        throw new Error("Transaction failed - no hash returned");
+                    }
                     console.log(chalk.yellow(`🔄 Wallet-${walletIndex + 1} ${description} Hash:`), chalk.blue(tx.hash));
                     transactions.push({ hash: tx.hash, walletIndex });
                     break;
@@ -97,9 +129,17 @@ async function executeTransactions(operations, description) {
     const confirmedReceipts = await waitForAllConfirmations(transactions, REQUIRED_CONFIRMATIONS);
 
     confirmedReceipts.forEach(({ receipt, walletIndex }) => {
-        const actualFee = receipt.gasUsed.mul(receipt.effectiveGasPrice);
-        const currentWalletFee = walletFees.get(walletIndex) || ethers.BigNumber.from(0);
-        walletFees.set(walletIndex, currentWalletFee.add(actualFee));
+        try {
+            if (receipt && receipt.gasUsed && receipt.effectiveGasPrice) {
+                const actualFee = receipt.gasUsed.mul(receipt.effectiveGasPrice);
+                const currentWalletFee = walletFees.get(walletIndex) || ethers.BigNumber.from(0);
+                walletFees.set(walletIndex, currentWalletFee.add(actualFee));
+            } else {
+                console.log(chalk.red(`⚠️ Invalid receipt for wallet ${walletIndex + 1}`));
+            }
+        } catch (error) {
+            console.log(chalk.red(`Error calculating fees for wallet ${walletIndex + 1}: ${error.message}`));
+        }
     });
 
     return confirmedReceipts;
@@ -112,51 +152,63 @@ async function processWallets(walletConfigs, iteration) {
 
     const walletInfos = await Promise.all(
         walletConfigs.map(async ({ privateKey, config: walletConfig }, index) => {
-            const wallet = new ethers.Wallet(privateKey, provider);
-            const points = await fetchTaikoPoints(wallet.address);
-            const balance = await provider.getBalance(wallet.address);
+            try {
+                const wallet = new ethers.Wallet(privateKey, provider);
+                const points = await fetchTaikoPoints(wallet.address);
+                const balance = await provider.getBalance(wallet.address);
 
-            console.log(chalk.cyan(`\n🔷 Wallet-${index + 1} Status:`));
-            if (points) {
-                console.log(chalk.blue("📊 Initial Points:"), chalk.yellow(points.totalPoints.toFixed(2)));
-                console.log(chalk.blue("🏆 Current Rank:"), chalk.yellow(points.rank));
+                console.log(chalk.cyan(`\n🔷 Wallet-${index + 1} Status:`));
+                if (points) {
+                    console.log(chalk.blue("📊 Initial Points:"), chalk.yellow(points.totalPoints.toFixed(2)));
+                    console.log(chalk.blue("🏆 Current Rank:"), chalk.yellow(points.rank));
+                }
+                console.log(chalk.blue("💎 Current balance:"), chalk.yellow(ethers.utils.formatEther(balance)), "ETH");
+                console.log(chalk.blue("⚙️ Configured amount range:"),
+                    chalk.yellow(`${walletConfig.amount_min} - ${walletConfig.amount_max}`), "ETH");
+
+                return { wallet, points, balance, index, config: walletConfig };
+            } catch (error) {
+                console.log(chalk.red(`Error initializing wallet ${index + 1}: ${error.message}`));
+                return null;
             }
-            console.log(chalk.blue("💎 Current balance:"), chalk.yellow(ethers.utils.formatEther(balance)), "ETH");
-            console.log(chalk.blue("⚙️ Configured amount range:"),
-                chalk.yellow(`${walletConfig.amount_min} - ${walletConfig.amount_max}`), "ETH");
-
-            return { wallet, points, balance, index, config: walletConfig };
         })
     );
 
-    const depositOperations = walletInfos.map(({ wallet, balance, index, config: walletConfig }) => {
-        const contract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, wallet);
-        const min = ethers.utils.parseEther(walletConfig.amount_min);
-        const max = ethers.utils.parseEther(walletConfig.amount_max);
-        const randomAmount = ethers.BigNumber.from(ethers.utils.randomBytes(32))
-            .mod(max.sub(min))
-            .add(min);
+    const validWalletInfos = walletInfos.filter(Boolean);
 
-        console.log(
-            chalk.blue(`🎲 Wallet-${index + 1} Random deposit amount:`),
-            chalk.yellow(ethers.utils.formatEther(randomAmount)),
-            "ETH"
-        );
+    const depositOperations = validWalletInfos.map(({ wallet, balance, index, config: walletConfig }) => {
+        try {
+            const contract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, wallet);
+            const min = ethers.utils.parseEther(walletConfig.amount_min);
+            const max = ethers.utils.parseEther(walletConfig.amount_max);
+            const randomAmount = ethers.BigNumber.from(ethers.utils.randomBytes(32))
+                .mod(max.sub(min))
+                .add(min);
 
-        if (balance.lt(randomAmount)) {
-            console.log(chalk.red(`⚠️ Wallet-${index + 1}: Insufficient balance for deposit`));
+            console.log(
+                chalk.blue(`🎲 Wallet-${index + 1} Random deposit amount:`),
+                chalk.yellow(ethers.utils.formatEther(randomAmount)),
+                "ETH"
+            );
+
+            if (balance.lt(randomAmount)) {
+                console.log(chalk.red(`⚠️ Wallet-${index + 1}: Insufficient balance for deposit`));
+                return null;
+            }
+
+            return {
+                operation: () =>
+                    contract.deposit({
+                        value: randomAmount,
+                        gasPrice: ethers.utils.parseUnits(config.weth.gasPrice, "gwei"),
+                        gasLimit: 104817,
+                    }),
+                walletIndex: index,
+            };
+        } catch (error) {
+            console.log(chalk.red(`Error creating deposit operation for wallet ${index + 1}: ${error.message}`));
             return null;
         }
-
-        return {
-            operation: () =>
-                contract.deposit({
-                    value: randomAmount,
-                    gasPrice: ethers.utils.parseUnits(config.weth.gasPrice, "gwei"),
-                    gasLimit: 104817,
-                }),
-            walletIndex: index,
-        };
     }).filter(Boolean);
 
     if (depositOperations.length > 0) {
@@ -166,29 +218,34 @@ async function processWallets(walletConfigs, iteration) {
     await sleep(config.weth.interval * 1000);
 
     const withdrawOperations = await Promise.all(
-        walletInfos.map(async ({ wallet, index }) => {
-            const contract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, wallet);
-            const wethBalance = await contract.balanceOf(wallet.address);
+        validWalletInfos.map(async ({ wallet, index }) => {
+            try {
+                const contract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, wallet);
+                const wethBalance = await contract.balanceOf(wallet.address);
 
-            console.log(
-                chalk.blue(`💎 Wallet-${index + 1} WETH balance:`),
-                chalk.yellow(ethers.utils.formatEther(wethBalance)),
-                "WETH"
-            );
+                console.log(
+                    chalk.blue(`💎 Wallet-${index + 1} WETH balance:`),
+                    chalk.yellow(ethers.utils.formatEther(wethBalance)),
+                    "WETH"
+                );
 
-            if (wethBalance.isZero()) {
-                console.log(chalk.red(`⚠️ Wallet-${index + 1}: No WETH balance to withdraw`));
+                if (wethBalance.isZero()) {
+                    console.log(chalk.red(`⚠️ Wallet-${index + 1}: No WETH balance to withdraw`));
+                    return null;
+                }
+
+                return {
+                    operation: () =>
+                        contract.withdraw(wethBalance, {
+                            gasPrice: ethers.utils.parseUnits(config.weth.gasPrice, "gwei"),
+                            gasLimit: 100000,
+                        }),
+                    walletIndex: index,
+                };
+            } catch (error) {
+                console.log(chalk.red(`Error creating withdraw operation for wallet ${index + 1}: ${error.message}`));
                 return null;
             }
-
-            return {
-                operation: () =>
-                    contract.withdraw(wethBalance, {
-                        gasPrice: ethers.utils.parseUnits(config.weth.gasPrice, "gwei"),
-                        gasLimit: 100000,
-                    }),
-                walletIndex: index,
-            };
         })
     );
 
@@ -200,29 +257,33 @@ async function processWallets(walletConfigs, iteration) {
     await sleep(5000);
 
     await Promise.all(
-        walletInfos.map(async ({ wallet, points: initialPoints, index }) => {
-            const finalPoints = await fetchTaikoPoints(wallet.address);
-            if (finalPoints && initialPoints) {
-                const pointsDifference = finalPoints.totalPoints - initialPoints.totalPoints;
-                console.log(chalk.blue(`📊 Wallet-${index + 1} Points earned:`), chalk.green(`+${pointsDifference.toFixed(2)}`));
-                console.log(
-                    chalk.blue(`🏆 Wallet-${index + 1} New Rank:`),
-                    chalk.yellow(finalPoints.rank),
-                    finalPoints.rank < initialPoints.rank
-                        ? chalk.green(`(↑${initialPoints.rank - finalPoints.rank})`)
-                        : ""
-                );
+        validWalletInfos.map(async ({ wallet, points: initialPoints, index }) => {
+            try {
+                const finalPoints = await fetchTaikoPoints(wallet.address);
+                if (finalPoints && initialPoints) {
+                    const pointsDifference = finalPoints.totalPoints - initialPoints.totalPoints;
+                    console.log(chalk.blue(`📊 Wallet-${index + 1} Points earned:`), chalk.green(`+${pointsDifference.toFixed(2)}`));
+                    console.log(
+                        chalk.blue(`🏆 Wallet-${index + 1} New Rank:`),
+                        chalk.yellow(finalPoints.rank),
+                        finalPoints.rank < initialPoints.rank
+                            ? chalk.green(`(↑${initialPoints.rank - finalPoints.rank})`)
+                            : ""
+                    );
 
-                if (!walletPoints.has(wallet.address)) {
-                    walletPoints.set(wallet.address, []);
+                    if (!walletPoints.has(wallet.address)) {
+                        walletPoints.set(wallet.address, []);
+                    }
+                    walletPoints.get(wallet.address).push({
+                        iteration: iteration + 1,
+                        pointsEarned: pointsDifference,
+                        totalPoints: finalPoints.totalPoints,
+                        rank: finalPoints.rank,
+                        rankChange: initialPoints.rank - finalPoints.rank
+                    });
                 }
-                walletPoints.get(wallet.address).push({
-                    iteration: iteration + 1,
-                    pointsEarned: pointsDifference,
-                    totalPoints: finalPoints.totalPoints,
-                    rank: finalPoints.rank,
-                    rankChange: initialPoints.rank - finalPoints.rank
-                });
+            } catch (error) {
+                console.log(chalk.red(`Error updating points for wallet ${index + 1}: ${error.message}`));
             }
         })
     );
